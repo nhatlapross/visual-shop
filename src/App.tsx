@@ -29,11 +29,6 @@ export default function App() {
         }
       />
       <Route path="try-on/:id" element={<TryOnPage />} />
-      {/* Temporary until the fitting-room port lands as src/pages/StorePage.tsx. */}
-      <Route
-        path="store"
-        element={<p className="p-8 text-center text-neutral-500">The fitting room is being installed. Back soon.</p>}
-      />
     </Routes>
   )
 }

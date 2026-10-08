@@ -22,9 +22,8 @@ src/
   lib/sui/                Transaction builders and on-chain queries
   lib/walrus.ts           Walrus upload / read
   hooks/useMarketplace.ts React Query hooks for listings and receipts
-  pages/                  Shop, Listing, Sell, Try-on, Purchases
-  components/             Layout, UI, studio/ (lane B), tryon/ (lane C)
-port/                     Source files from eye-clinic waiting to be ported (not compiled)
+  pages/                  Home (landing), Store (fitting room), Listing, Sell, Purchases
+  components/             Layout, ui/, studio/ (photo → 3D), tryon/ (fitting room)
 docs/                     spec.md, plan.md
 ```
 
