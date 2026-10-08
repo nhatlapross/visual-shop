@@ -22,3 +22,24 @@ body {
     }
   }
 }
+
+/* /sell: laser sweep while a photo is turned into a 3D model. */
+@theme {
+  --animate-sell-scan: sell-scan 2s ease-in-out infinite alternate;
+
+  @keyframes sell-scan {
+    from {
+      transform: translateY(-100%);
+    }
+    to {
+      transform: translateY(330%);
+    }
+  }
+}
+
+.sell-scan-grid {
+  background-image:
+    linear-gradient(to right, rgb(52 211 153 / 0.2) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(52 211 153 / 0.2) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
