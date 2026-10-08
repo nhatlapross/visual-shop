@@ -1,19 +1,19 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Hand, X } from 'lucide-react'
-import { GestureInterpreter, type HandAction, type HandUpdate } from './gestureInterpreter'
+import { GestureInterpreter, pointingDirection, type HandAction, type HandUpdate } from './gestureInterpreter'
 import { createHandRecognizer } from './handRecognizer'
 
 const HINT_KEY = 'visual-shop:hand-hint-dismissed'
 const RECOGNIZE_EVERY_MS = 80
 
 const GUIDE: { icon: string; label: string }[] = [
-  { icon: '👋', label: 'Swipe your hand left / right: change frame' },
+  { icon: '👉', label: 'Point left / right: change frame (keep pointing to browse)' },
   { icon: '👍', label: 'Hold thumbs-up: buy' },
   { icon: '✌️', label: 'Hold victory: snapshot' },
   { icon: '✊', label: 'Hold a fist: show / hide frames' },
 ]
 
-const HOLD_ICON: Record<HandAction, string> = { buy: '👍', snapshot: '✌️', toggleList: '✊', next: '👋', prev: '👋' }
+const HOLD_ICON: Record<HandAction, string> = { buy: '👍', snapshot: '✌️', toggleList: '✊', next: '👉', prev: '👈' }
 
 interface HandControlLayerProps {
   videoRef: RefObject<HTMLVideoElement | null>
@@ -34,7 +34,6 @@ export function HandControlLayer({ videoRef, active, mirrored, toViewport, onAct
   const [status, setStatus] = useState<'off' | 'loading' | 'ready' | 'error'>('off')
   const [hand, setHand] = useState<{ x: number; y: number } | null>(null)
   const [hold, setHold] = useState<HandUpdate['hold'] | null>(null)
-  const [swipe, setSwipe] = useState<HandUpdate['swipe'] | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [showHint, setShowHint] = useState(() => {
     try {
@@ -53,7 +52,6 @@ export function HandControlLayer({ videoRef, active, mirrored, toViewport, onAct
       setStatus('off')
       setHand(null)
       setHold(null)
-      setSwipe(null)
       return
     }
     let cancelled = false
@@ -78,20 +76,23 @@ export function HandControlLayer({ videoRef, active, mirrored, toViewport, onAct
           lastRun = now
           lastVideoTime = video.currentTime
           const result = r.recognizeForVideo(video, now)
-          const palm = result.landmarks?.[0]?.[9]
-          if (!palm) {
+          const landmarks = result.landmarks?.[0]
+          const palm = landmarks?.[9]
+          if (!landmarks || !palm) {
             interpreter.update(null)
             setHand(null)
             setHold(null)
-            setSwipe(null)
-            return
+                  return
           }
           const x = latest.current.mirrored ? 1 - palm.x : palm.x
           const top = result.gestures?.[0]?.[0]
-          const update = interpreter.update({ t: now, gesture: top?.categoryName ?? null, score: top?.score ?? 0, x, y: palm.y })
+          const point = pointingDirection(landmarks, {
+            mirrored: latest.current.mirrored,
+            aspect: video.videoWidth / (video.videoHeight || 1),
+          })
+          const update = interpreter.update({ t: now, gesture: top?.categoryName ?? null, score: top?.score ?? 0, x, y: palm.y, point })
           setHand({ x, y: palm.y })
           setHold(update.hold ?? null)
-          setSwipe(update.action ? null : (update.swipe ?? null))
           if (update.action) {
             const message = latest.current.onAction(update.action)
             setToast(message)
@@ -155,15 +156,15 @@ export function HandControlLayer({ videoRef, active, mirrored, toViewport, onAct
               {hold ? HOLD_ICON[hold.action] : '✋'}
             </text>
           </svg>
-          {/* Swipe hint: arrows on the side the hand is moving toward, filling in as it nears a swipe. */}
-          {swipe && (
+          {/* While pointing, an arrow on the side the frame list will move toward. */}
+          {(hold?.action === 'next' || hold?.action === 'prev') && (
             <div
               className={`absolute top-1/2 -translate-y-1/2 text-2xl font-black text-sky-300 drop-shadow-[0_0_6px_rgba(56,189,248,0.9)] ${
-                swipe.direction === 'next' ? 'right-full mr-1' : 'left-full ml-1'
+                hold.action === 'next' ? 'left-full ml-1' : 'right-full mr-1'
               }`}
-              style={{ opacity: 0.25 + 0.75 * Math.min(1, swipe.progress) }}
+              style={{ opacity: 0.35 + 0.65 * Math.min(1, hold.progress) }}
             >
-              {swipe.direction === 'next' ? '‹‹' : '››'}
+              {hold.action === 'next' ? '››' : '‹‹'}
             </div>
           )}
         </div>
