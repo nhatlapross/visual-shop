@@ -1,4 +1,3 @@
-'use client';
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -84,7 +83,7 @@ export default function EyewearComparisonView({
         preserveDrawingBuffer: true,
       });
     } catch {
-      setError('Trình duyệt không tạo được WebGL.');
+      setError('This browser could not create a WebGL context.');
       return;
     }
     const scene = new THREE.Scene();
@@ -119,7 +118,7 @@ export default function EyewearComparisonView({
       try {
         if (importedFile) {
           if (importedFile.size > 128 * 1024 ** 2)
-            throw new Error('GLB quá lớn (tối đa 128 MiB).');
+            throw new Error('The GLB is too large (128 MiB max).');
           const bytes = await importedFile.arrayBuffer();
           if (disposed) return;
           validateGlbContainer(bytes);
@@ -129,9 +128,9 @@ export default function EyewearComparisonView({
             if (node.userData.eyewear) managed = true;
           });
           if (managed && !readAssetMetadata(model))
-            throw new Error('File GLB có metadata không hợp lệ.');
+            throw new Error('The GLB file has invalid metadata.');
           if (inspectFrontFrames(model).some((check) => !check.valid))
-            throw new Error('File GLB có cấu trúc gọng không hợp lệ.');
+            throw new Error('The GLB file has an invalid frame structure.');
         } else {
           model = buildReferenceGeometry(candidate.geometry);
           applyCandidateMaterials(model, candidate, new Map());
@@ -282,12 +281,12 @@ export default function EyewearComparisonView({
         if (!disposed)
           setError(
             err instanceof Error && err.message === 'GLB_EXTERNAL_RESOURCE'
-              ? 'GLB phải nhúng tài nguyên; không tải ảnh/buffer bên ngoài.'
+              ? 'The GLB must embed its resources; external images and buffers are not loaded.'
               : err instanceof Error && err.message === 'INVALID_GLB'
-                ? 'File GLB không hợp lệ.'
+                ? 'Invalid GLB file.'
                 : err instanceof Error
                   ? err.message
-                  : 'Không thể hiển thị mô hình'
+                  : 'Could not display the model'
           );
       }
     };
@@ -316,17 +315,16 @@ export default function EyewearComparisonView({
   ]);
   return (
     <div
-      className="relative overflow-hidden rounded-lg border bg-neutral-100"
+      className="relative overflow-hidden rounded-lg border border-neutral-200 bg-neutral-100"
       style={{
         aspectRatio: reference ? `${reference.width}/${reference.height}` : '1',
       }}
       data-testid="match-view"
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       {mode === 'overlay' && (
         <img
           src={photo || undefined}
-          alt="Chồng mô hình lên ảnh gốc"
+          alt="Model overlaid on the original photo"
           className="absolute inset-0 h-full w-full"
         />
       )}
@@ -334,7 +332,7 @@ export default function EyewearComparisonView({
       {error && (
         <p
           role="alert"
-          className="absolute inset-x-3 bottom-3 rounded bg-background p-3 text-sm text-destructive"
+          className="absolute inset-x-3 bottom-3 rounded-md bg-white p-3 text-sm text-red-600 shadow"
         >
           {error}
         </p>
