@@ -11,7 +11,7 @@ import {
 } from "./sellTypes";
 
 const NEXT_STEPS = [
-  "Your 3D model is uploaded to Cloudinary.",
+  "Your file is uploaded to Cloudinary.",
   "You approve the transaction in your wallet.",
   "The listing is created on Sui and appears in the shop.",
 ];
@@ -79,7 +79,7 @@ export default function SellReview({
 
             <dd className="flex items-center gap-1.5 font-semibold">
               <Box className="size-5 text-indigo-500" />
-              3D model · {formatBytes(media.glb.size)}
+              {media.type === "glb" ? "3D model" : "Image"} · {formatBytes(media.file.size)}
             </dd>
           </div>
         </dl>

@@ -1,5 +1,5 @@
 /** Decorative "scanning" layer drawn over the photo while it is being turned into 3D. */
-export default function SellUploadStepBuildScan() {
+export default function SellUploadStepConvertScan() {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
       <div className="absolute inset-0 bg-neutral-950/35" />

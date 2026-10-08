@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useCurrentAccount } from '@mysten/dapp-kit-react'
 import SellDetailsForm from '@/components/seller/SellDetailsForm'
 import SellListed from '@/components/seller/SellListed'
@@ -6,7 +6,7 @@ import SellPublishProgress from '@/components/seller/SellPublishProgress'
 import SellReview from '@/components/seller/SellReview'
 import SellStepper from '@/components/seller/SellStepper'
 import SellUploadStep from '@/components/seller/SellUploadStep'
-import useSellMockPublish from '@/components/seller/useSellMockPublish'
+import useSellPublish from '@/components/seller/useSellPublish'
 import type { SellDetailsValues, SellMedia, SellStage } from '@/components/seller/sellTypes'
 
 const EMPTY_DETAILS: SellDetailsValues = { title: '', description: '', price: '', stock: '1' }
@@ -18,8 +18,9 @@ export function SellPage() {
   const account = useCurrentAccount()
   const [currentStage, setStage] = useState<SellStage>('upload')
   const [media, setMedia] = useState<SellMedia | null>(null)
+  const mediaRef = useRef<SellMedia | null>(null)
   const [details, setDetails] = useState<SellDetailsValues>(EMPTY_DETAILS)
-  const publish = useSellMockPublish()
+  const publish = useSellPublish()
   const walletConnected = Boolean(account)
   const stage: SellStage = publish.done ? 'listed' : currentStage
 
@@ -31,16 +32,27 @@ export function SellPage() {
     return () => window.removeEventListener('beforeunload', warn)
   }, [media, stage])
 
+  // Image previews are object URLs; release the old one whenever the media is replaced or cleared.
+  const updateMedia = (next: SellMedia | null) => {
+    const previous = mediaRef.current
+    if (previous && previous.previewUrl !== next?.previewUrl && previous.previewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(previous.previewUrl)
+    }
+    mediaRef.current = next
+    setMedia(next)
+  }
+
   const startOver = () => {
     publish.reset()
-    setMedia(null)
+    updateMedia(null)
     setDetails(EMPTY_DETAILS)
     setStage('upload')
   }
 
   const submit = () => {
+    if (!media) return
     setStage('publish')
-    void publish.start()
+    void publish.start(media, details)
   }
 
   const backToPreview = () => {
@@ -53,7 +65,7 @@ export function SellPage() {
       <SellStepper current={STEP_OF_STAGE[stage]} />
 
       {stage === 'upload' && (
-        <SellUploadStep media={media} onMediaChange={setMedia} onContinue={() => setStage('details')} />
+        <SellUploadStep media={media} onMediaChange={updateMedia} onContinue={() => setStage('details')} />
       )}
 
       {stage === 'details' && media && (
@@ -86,13 +98,13 @@ export function SellPage() {
           steps={publish.steps}
           error={publish.error}
           running={publish.running}
-          onRetry={() => void publish.start()}
+          onRetry={() => media && void publish.start(media, details)}
           onBack={backToPreview}
         />
       )}
 
       {stage === 'listed' && media && (
-        <SellListed media={media} details={details} onListAnother={startOver} />
+        <SellListed media={media} details={details} digest={publish.digest} onListAnother={startOver} />
       )}
     </section>
   )

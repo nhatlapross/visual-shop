@@ -27,7 +27,7 @@ export default function SellListingPreview({ media, title, price, stock }: SellL
         </p>
 
         <p className="truncate text-xs text-neutral-400">
-          {media.fileName} · {formatBytes(media.glb.size)}
+          {media.fileName} · {formatBytes(media.file.size)}
         </p>
       </div>
     </div>

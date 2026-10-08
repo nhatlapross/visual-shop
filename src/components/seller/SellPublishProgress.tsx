@@ -1,7 +1,7 @@
 import { Check, Loader2, TriangleAlert } from 'lucide-react'
 import { tv } from 'tailwind-variants'
 import { Button } from '@/components/ui/button'
-import type { SellPublishStep } from './useSellMockPublish'
+import type { SellPublishStep } from './useSellPublish'
 
 // Marker and text read the same step status.
 const row = tv({
@@ -46,7 +46,11 @@ export default function SellPublishProgress({ steps, error, running, onRetry, on
                 {step.status === 'error' && <TriangleAlert className="size-5" />}
               </div>
 
-              <p className={text()}>{step.label}</p>
+              <p className={text()}>
+                {step.label}
+
+                {step.detail && <span className="ml-2 text-xs font-normal text-neutral-500">{step.detail}</span>}
+              </p>
             </li>
           )
         })}

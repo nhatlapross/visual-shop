@@ -4,13 +4,17 @@ export type SellStage = 'upload' | 'details' | 'preview' | 'publish' | 'listed'
 /** Cloudinary's free plan caps a file at about 10 MB; check before uploading anything. */
 export const SELL_MAX_FILE_BYTES = 10 * 1024 ** 2
 
-/** The 3D model the listing will point at (`image_url` with `image_type = "glb"`). */
+/** File types a listing can point at; stored on-chain as `image_type`. */
+export const SELL_MEDIA_TYPES = ['glb', 'png', 'jpg'] as const
+export type SellMediaType = (typeof SELL_MEDIA_TYPES)[number]
+
+/** The single file a listing points at (`image_url` + `image_type`): the converter's result, or a GLB the seller uploaded. */
 export interface SellMedia {
-  glb: Blob
+  file: Blob
+  type: SellMediaType
   fileName: string
-  /** Rendered snapshot of the model for previews; empty when the seller uploaded a GLB directly. */
+  /** Image for previews: the file itself for png/jpg, a render of the model for a built GLB, empty for a bare GLB. */
   previewUrl: string
-  origin: 'photo' | 'glb-upload'
 }
 
 /** Form values stay strings; they are converted (suiToMist, Number) when the listing is published. */

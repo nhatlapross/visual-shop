@@ -1,15 +1,14 @@
-import { lazy, Suspense, useState } from "react";
-import { ArrowRight, ImagePlus, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { ArrowRight, ImagePlus } from "lucide-react";
 import { tv } from "tailwind-variants";
 import { Button } from "@/components/ui/button";
+import { convertPhoto, keepPhoto } from "@/lib/convertPhoto";
 import { validateGlbContainer } from "@/lib/eyewear-3d/reconstruction/asset";
 import SellMediaPreview from "./SellMediaPreview";
 import SellUploadStepButtons from "./SellUploadStepButtons";
 import SellUploadStepCamera from "./SellUploadStepCamera";
+import SellUploadStepConvert from "./SellUploadStepConvert";
 import { formatBytes, SELL_MAX_FILE_BYTES, type SellMedia } from "./sellTypes";
-
-// three.js and the reconstruction worker are heavy; only load them once a photo is chosen.
-const SellUploadStepBuild = lazy(() => import("./SellUploadStepBuild"));
 
 // One square frame for every state (empty, camera, scanning, ready) so nothing shifts when a photo arrives.
 const frame = tv({
@@ -23,7 +22,11 @@ interface SellUploadStepProps {
   onContinue: () => void;
 }
 
-/** Step 1: add a photo (file or camera) and watch it become a 3D model. A GLB skips the conversion. */
+/**
+ * Step 1: add a photo (file or camera). The frame scans it for a moment, then shows the file the converter returned.
+ * Without an AI converter (`convertPhoto` in `@/lib/convertPhoto`) that file is exactly the photo that was chosen or
+ * taken. A GLB the seller picks skips the scan.
+ */
 export default function SellUploadStep({
   media,
   onMediaChange,
@@ -66,10 +69,10 @@ export default function SellUploadStep({
     }
     setPhoto(null);
     onMediaChange({
-      glb: file,
+      file,
+      type: "glb",
       fileName: file.name,
       previewUrl: "",
-      origin: "glb-upload",
     });
   };
 
@@ -89,25 +92,18 @@ export default function SellUploadStep({
           <>
             <div className={frame({ filled: Boolean(photo || media) })}>
               {photo ? (
-                <Suspense
-                  fallback={
-                    <div className="grid size-full place-items-center bg-neutral-900 text-white/70">
-                      <Loader2 className="size-5 animate-spin" />
-                    </div>
-                  }
-                >
-                  <SellUploadStepBuild
-                    key={session}
-                    photo={photo}
-                    onBuilt={onMediaChange}
-                  />
-                </Suspense>
+                <SellUploadStepConvert
+                  key={session}
+                  photo={photo}
+                  convert={convertPhoto ?? keepPhoto}
+                  onConverted={onMediaChange}
+                />
               ) : media ? (
                 <>
                   <SellMediaPreview media={media} />
 
                   <p className="absolute inset-x-0 bottom-0 bg-linear-to-t from-black/60 to-transparent px-4 pt-8 pb-3 text-center text-xs text-white">
-                    {media.fileName} · {formatBytes(media.glb.size)}
+                    {media.fileName} · {formatBytes(media.file.size)}
                   </p>
                 </>
               ) : (

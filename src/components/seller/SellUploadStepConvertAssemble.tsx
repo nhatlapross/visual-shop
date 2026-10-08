@@ -7,7 +7,7 @@ const SCATTER_END = 0.3
 const CONVERGE_END = 0.86
 const BACKGROUND = [11, 16, 32] as const
 
-interface SellUploadStepBuildAssembleProps {
+interface SellUploadStepConvertAssembleProps {
   /** Object URL of the photo the model was built from. */
   fromUrl: string
   /** Data URL of the finished 3D render. */
@@ -45,7 +45,7 @@ const clamp01 = (t: number) => Math.min(1, Math.max(0, t))
  * The photo shatters into pixels, they scatter, then fly together into the finished 3D render.
  * Pure 2D canvas: the real model is already on screen underneath, this is the reveal.
  */
-export default function SellUploadStepBuildAssemble({ fromUrl, toUrl, onDone }: SellUploadStepBuildAssembleProps) {
+export default function SellUploadStepConvertAssemble({ fromUrl, toUrl, onDone }: SellUploadStepConvertAssembleProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const onDoneRef = useRef(onDone)
 

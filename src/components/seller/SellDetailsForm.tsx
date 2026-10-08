@@ -55,7 +55,7 @@ export default function SellDetailsForm({ media, defaultValues, onBack, onContin
           </div>
 
           <p className="text-center text-xs text-neutral-400">
-            {media.fileName} · {formatBytes(media.glb.size)}
+            {media.fileName} · {formatBytes(media.file.size)}
           </p>
         </div>
 
