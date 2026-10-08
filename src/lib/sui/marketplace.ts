@@ -1,4 +1,4 @@
-import { Transaction } from '@mysten/sui/transactions'
+import { coinWithBalance, Transaction } from '@mysten/sui/transactions'
 import { bcs } from '@mysten/sui/bcs'
 import type { ClientWithCoreApi } from '@mysten/sui/client'
 import { config } from '@/config'
@@ -27,10 +27,14 @@ export function createListingTx(input: NewListingInput): Transaction {
   return tx
 }
 
-/** Pays exactly `listing.price` from gas and sends the Receipt to `buyer`. */
+/**
+ * Pays exactly `listing.price` and sends the Receipt to `buyer`.
+ * `coinWithBalance` draws from coin objects or the address balance; faucet-funded
+ * wallets only have the latter, so `splitCoins(tx.gas, …)` would fail for them.
+ */
 export function buyTx(listing: Pick<Listing, 'id' | 'price'>, buyer: string): Transaction {
   const tx = new Transaction()
-  const [payment] = tx.splitCoins(tx.gas, [tx.pure.u64(listing.price)])
+  const payment = tx.add(coinWithBalance({ balance: listing.price }))
   const receipt = tx.moveCall({
     target: target('buy'),
     arguments: [tx.object(listing.id), payment],

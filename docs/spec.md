@@ -46,7 +46,7 @@ Browser (static Vite app)
 - `Listing` (shared) has these fields: `seller`, `title`, `description`, `price` (MIST), `stock`, `sold`, `image_blob_id`, `model_blob_id`, `active`.
 - `Receipt` (`key, store`, owned by the buyer) has these fields: `listing_id`, `seller`, `buyer`, `price`, `title`, `image_blob_id`, `model_blob_id`.
 - `create_listing(&mut Shop, title, description, price, stock, image_blob_id, model_blob_id): ID` shares the listing.
-- `buy(&mut Listing, Coin<SUI>): Receipt` checks that the listing is active and in stock and that the payment is exact. It sends the coin to the seller. The PTB splits the payment from gas and transfers the returned Receipt to the sender (see `buyTx`).
+- `buy(&mut Listing, Coin<SUI>): Receipt` checks that the listing is active and in stock and that the payment is exact. It sends the coin to the seller. The PTB builds the payment with `coinWithBalance` and transfers the returned Receipt to the sender (see `buyTx`). Do not use `splitCoins(tx.gas, …)`: the faucet now credits the *address balance*, so funded wallets may own no coin objects at all.
 - `update_listing(&mut Listing, price, stock, active)` can only be called by the seller.
 - Events: `ListingCreated`, `ListingUpdated`, `Purchased`.
 - Error codes: `ENotSeller = 0`, `EWrongPayment = 1`, `EOutOfStock = 2`, `EInactive = 3`, `EInvalidPrice = 4`.
