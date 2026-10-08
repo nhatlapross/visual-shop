@@ -18,7 +18,7 @@ The two parts only meet **on-chain**: Part 1 writes `Listing` objects and Part 2
 - **Done:** the **fitting room** at `/store`, which is the eye-clinic try-on room with its catalog.
   - It lives in `src/components/tryon/ArTryOn.tsx` with props `{ listings, initialListingId?, onBuy(listing), onClose? }` and is rendered full-screen by `src/pages/StorePage.tsx`. It is lazy-loaded, so three.js and MediaPipe only download on `/store`.
   - The catalog shows every active listing; sold-out frames can be tried on but not bought. It keeps the 360° viewer, face-shape analysis, the Adjust panel, snapshots and a selfie upload when the camera is blocked.
-  - Buy calls `onBuy`, which navigates to `/listing/:id` for now (C4 changes that). `/try-on/:id` redirects to `/store?frame=:id`.
+  - Buy calls `onBuy`, which opens `PurchaseModal` (`src/components/store/`) over the room: order summary → wallet signature via `useBuyListing()` → receipt with the transaction digest and a Suiscan link (C4). `/try-on/:id` redirects to `/store?frame=:id`.
   - **Known limits:** the fit ignores the GLB's `userData.eyewear` anchors and centres on the bounding box, so check it on a real face. Swapping between the 4 catalog frames was verified in headless Chrome.
 - **Contract republished** with William's layout (`status`, `image_url`, `image_type`): package `0xdb58…303f`, Shop `0xdf61…2934` (full IDs in `src/deployment.json`). Listings from the old package no longer appear.
 - **Catalog on testnet (4 frames)**, imported from the eye-clinic products that had 3D models. Each GLB is hosted on Cloudinary (`visual-shop/catalog/frame-1…4.glb`) and stored on-chain as `image_url` with `image_type = "glb"`:

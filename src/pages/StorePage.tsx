@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
+import { PurchaseModal } from '@/components/store/PurchaseModal'
 import { ArTryOn } from '@/components/tryon/ArTryOn'
 import { isContractConfigured } from '@/config'
 import { useListings } from '@/hooks/useMarketplace'
@@ -10,6 +11,9 @@ export function StorePage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { data: listings, isLoading, isError, error, refetch } = useListings()
+  // Buying happens over the room, so the camera and the fitted frame stay put.
+  const [buyingId, setBuyingId] = useState<string | null>(null)
+  const buying = listings?.find((l) => l.id === buyingId)
 
   if (!isContractConfigured()) {
     return (
@@ -39,12 +43,16 @@ export function StorePage() {
   }
 
   return (
-    <ArTryOn
-      listings={listings}
-      initialListingId={searchParams.get('frame') ?? undefined}
-      onBuy={(listing) => navigate(`/listing/${listing.id}`)}
-      onClose={() => navigate('/')}
-    />
+    <>
+      <ArTryOn
+        listings={listings}
+        initialListingId={searchParams.get('frame') ?? undefined}
+        // Holding 👍 fires onBuy repeatedly; keep the checkout that is already open.
+        onBuy={(listing) => setBuyingId((current) => current ?? listing.id)}
+        onClose={() => navigate('/')}
+      />
+      {buying && <PurchaseModal key={buying.id} listing={buying} onClose={() => setBuyingId(null)} />}
+    </>
   )
 }
 

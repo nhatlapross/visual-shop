@@ -62,10 +62,13 @@ export function useBuyListing() {
         timestampMs: indexed?.timestampMs ?? Date.now(),
       }
     },
-    onSuccess: (_purchase, listing) => {
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['receipts'] })
+    },
+    // Also after a failure: an abort like "Price changed" means our copy of the listing is stale.
+    onSettled: (_purchase, _error, listing) => {
       void queryClient.invalidateQueries({ queryKey: ['listings'] })
       void queryClient.invalidateQueries({ queryKey: ['listing', listing.id] })
-      void queryClient.invalidateQueries({ queryKey: ['receipts'] })
     },
   })
 
