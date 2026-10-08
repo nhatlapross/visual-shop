@@ -41,6 +41,7 @@ import {
 import { startGlassesOverlay, type GlassesOverlay, type SmoothedPose } from './glassesOverlay'
 import { LISTING_STATUS, type Listing } from '@/types'
 import { formatSui } from '@/lib/sui/format'
+import { modelUrl, thumbnailUrl } from '@/lib/media'
 import { FrameViewerModal } from './FrameViewerModal'
 import './tryon.css'
 
@@ -73,8 +74,8 @@ function toFrameItem(listing: Listing): FrameItem {
     priceLabel: `${formatSui(listing.price)} SUI`,
     stockLabel: soldOut ? 'Sold out' : `${listing.stock} in stock`,
     soldOut,
-    image: listing.imageUrl,
-    modelUrl: listing.imageType === 'glb' ? listing.imageUrl : '',
+    image: thumbnailUrl(listing.imageUrl, listing.imageType, 300),
+    modelUrl: modelUrl(listing.imageUrl, listing.imageType),
   }
 }
 

@@ -19,10 +19,13 @@ The two parts only meet **on-chain**: Part 1 writes `Listing` objects and Part 2
   - It lives in `src/components/tryon/ArTryOn.tsx` with props `{ listings, initialListingId?, onBuy(listing), onClose? }` and is rendered full-screen by `src/pages/StorePage.tsx`. It is lazy-loaded, so three.js and MediaPipe only download on `/store`.
   - The catalog shows every active listing; sold-out frames can be tried on but not bought. It keeps the 360° viewer, face-shape analysis, the Adjust panel, snapshots and a selfie upload when the camera is blocked.
   - Buy calls `onBuy`, which navigates to `/listing/:id` for now (C4 changes that). `/try-on/:id` redirects to `/store?frame=:id`.
-  - **Known limits:** the fit ignores the GLB's `userData.eyewear` anchors and centres on the bounding box, so check it on a real face. Swapping between two frames is untested, because testnet has only one listing so far. The demo listing's photo shows a black frame but its GLB is a silver model.
-- **Demo listing on testnet**, so Part 2 can start right away:
-  - Listing `0xf565b751376c47403af4da6ab99f14c4699159fa37fc24d47c624ec7291c2580`, "Demo Frame · Classic Black", 0.1 SUI, stock 5.
-  - To seed more: `scripts/seed-listing.sh <photo> <glb> "<title>" "<description>" <price_mist> <stock>`. It uses the deployer wallet in your local `sui client`.
+  - **Known limits:** the fit ignores the GLB's `userData.eyewear` anchors and centres on the bounding box, so check it on a real face. Swapping between the 4 catalog frames was verified in headless Chrome.
+- **Contract republished** with William's layout (`status`, `image_url`, `image_type`): package `0xdb58…303f`, Shop `0xdf61…2934` (full IDs in `src/deployment.json`). Listings from the old package no longer appear.
+- **Catalog on testnet (4 frames)**, imported from the eye-clinic products that had 3D models. Each GLB is hosted on Cloudinary (`visual-shop/catalog/frame-1…4.glb`) and stored on-chain as `image_url` with `image_type = "glb"`:
+  - "Bold Square · Black & Tan" 0.12 SUI, "Half-Rim · Gunmetal" 0.09 SUI, "Classic Sunglasses · Black" 0.15 SUI, "Round Wire · Matte Black" 0.08 SUI, each with stock 10.
+  - Listing IDs: `0x46c885bc38e23815a3ee7bb5c301dc4bd13d0beb5ee12eff56c35a76f48f545f`, `0x99f316fb9796aa1221f2ca977f72f90f96f87fe3cf14c55984ff9b2541561fb2`, `0xba5c6cb2f7d00d03f46395d5b423999a1bc790888d7d17dcfe0ea19985cc814b`, `0xd9de6e0ccaa988a15d9d3aececba36baf4cf1cf4a6e417d1011b8ebb1daaac82`.
+- **Thumbnails for GLB listings:** `src/lib/media.ts` has `thumbnailUrl(url, type, size)`, which asks Cloudinary to render the GLB to PNG (same URL, `.png` plus a transformation), and `modelUrl(url, type)`. The landing page and the fitting room use them. Part 2: use `thumbnailUrl` for every listing or receipt image (C2, C5).
+- To seed more catalog items (lead only, needs `CLOUDINARY_URL` in a local `.env`): `node --env-file=<.env> scripts/upload-cloudinary.mjs <file.glb>`, then `scripts/seed-listing.sh <url> glb "<title>" "<description>" <price_mist> <stock>`.
 
 ## How we work
 
@@ -53,10 +56,10 @@ The two parts only meet **on-chain**: Part 1 writes `Listing` objects and Part 2
 
 | ID | Task | Done when |
 |---|---|---|
-| C1 | **`ModelViewer`** in `src/components/store/`, built with three.js, `GLTFLoader`, `OrbitControls` and `createStudioEnvironment(renderer)` from `@/lib/eyewear-3d/environment`. Load from `listing.imageUrl` when `listing.imageType === 'glb'`; the host must serve CORS. Auto-rotate until the user drags, fit the camera to the bounding box (studio GLBs are in meters), and dispose renderer, geometries and textures on unmount. | The demo listing's GLB rotates smoothly and the page has no WebGL leaks when you navigate back and forth. |
+| C1 | **`ModelViewer`** in `src/components/store/`, built with three.js, `GLTFLoader`, `OrbitControls` and `createStudioEnvironment(renderer)` from `@/lib/eyewear-3d/environment`. Load from `modelUrl(listing.imageUrl, listing.imageType)` (from `@/lib/media`); Cloudinary serves CORS `*`. Auto-rotate until the user drags, fit the camera to the bounding box (studio GLBs are in meters), and dispose renderer, geometries and textures on unmount. | A catalog GLB rotates smoothly and the page has no WebGL leaks when you navigate back and forth. |
 | C2 | **Listing page** (product detail; the fitting room's Buy lands here): photo plus viewer (tabs or side by side), title, description, price, stock left, seller (`shortAddress`), a **Try on** button linking to `/store?frame=:id`, and a **Buy** button. | Looks demo-ready on desktop and mobile. |
 | C3 | **Buy.** Call `signAndExecuteTransaction({ transaction: buyTx(listing, account.address) })`. On success, invalidate `['listings']`, `['listing', id]` and `['receipts']`, then show a success card with a Suiscan link. Disable Buy when stock is 0, when the listing is inactive, or when you are the seller. Map abort codes to messages: 1 → "Price changed, reload", 2 → "Sold out", 3 → "No longer for sale". With no wallet connected, show "Connect wallet to buy". | The buyer pays 0.1 SUI, stock goes from 5 to 4, and the seller's balance goes up. |
-| C4 | **Buy from the fitting room:** make `onBuy` in `StorePage` buy in place (reuse the C3 logic as a `useBuyListing()` hook in `src/components/store/`), showing the success card over the room instead of leaving it. Check it with the demo listing at `/store?frame=0xf565…2580`. | Users can try on and buy without leaving the room. |
+| C4 | **Buy from the fitting room:** make `onBuy` in `StorePage` buy in place (reuse the C3 logic as a `useBuyListing()` hook in `src/components/store/`), showing the success card over the room instead of leaving it. Check it with any catalog frame, e.g. `/store?frame=0x46c8…545f`. | Users can try on and buy without leaving the room. |
 | C5 | **Purchases page:** receipt cards with the photo (`r.imageUrl`), title, price, a link to the listing and a Suiscan object link. | A purchase appears right after C3. |
 | C6 | **Landing page polish** (`ShopPage.tsx`, already rebuilt by the lead with the hero, "Enter the store" and "In the fitting room now"): loading skeleton for the frame row, error state, any visual polish. | Looks demo-ready on desktop and mobile. |
 
@@ -73,7 +76,7 @@ The two parts only meet **on-chain**: Part 1 writes `Listing` objects and Part 2
 | Time | Milestone |
 |---|---|
 | now | Part 1 and Part 2 start. |
-| +1:30 | Each part works end-to-end on its own (seller lists a frame; buyer views, tries on and buys the demo listing). |
+| +1:30 | Each part works end-to-end on its own (seller lists a frame; buyer views, tries on and buys a catalog frame). |
 | +2:00 | **Integration:** the seller wallet lists a new frame and the buyer wallet tries it on and buys it, both on the deployed URL. |
 | +2:30 | Demo listings seeded, video recorded, submitted. Whatever time is left is buffer. |
 
@@ -93,5 +96,6 @@ pnpm build          # type-check + production build
 pnpm test           # Vitest (eyewear-3d lib)
 pnpm test:move      # Move unit tests (needs sui CLI ≥ 1.81: `suiup install sui@testnet`)
 pnpm publish:move   # publish the contract (lead only), writes src/deployment.json
-scripts/seed-listing.sh public/glasses/rian-black-reference.jpg public/models/sample-glasses.glb "Title" "Description" 100000000 5
+node --env-file=../.env scripts/upload-cloudinary.mjs frame.glb   # lead only: host a GLB on Cloudinary
+scripts/seed-listing.sh <url> glb "Title" "Description" 100000000 5   # list it on-chain
 ```

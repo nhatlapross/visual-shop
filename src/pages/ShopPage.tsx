@@ -1,11 +1,12 @@
 import { ArrowRight, Box, Camera, Wallet } from 'lucide-react'
 import { Link } from 'react-router'
 import { useListings } from '@/hooks/useMarketplace'
+import { thumbnailUrl } from '@/lib/media'
 import { formatSui } from '@/lib/sui/format'
 import { LISTING_STATUS } from '@/types'
 
 const steps = [
-  { icon: Box, title: 'Built from real photos', text: 'Sellers upload a photo of the frame and get a 3D model, stored on Walrus.' },
+  { icon: Box, title: 'Built from real photos', text: 'Sellers upload a photo of the frame and get a 3D model buyers can try on.' },
   { icon: Camera, title: 'Try it on your face', text: 'Step into the fitting room and see every frame live through your camera.' },
   { icon: Wallet, title: 'Pay in SUI', text: 'Checkout is one transaction on Sui. Your receipt lives in your wallet.' },
 ]
@@ -60,7 +61,7 @@ export function ShopPage() {
                   className="group block overflow-hidden rounded-xl border border-neutral-200 bg-white"
                 >
                   <div className="relative">
-                    <img src={l.imageUrl} alt={l.title} className="aspect-square w-full object-cover" />
+                    <img src={thumbnailUrl(l.imageUrl, l.imageType, 600)} alt={l.title} className="aspect-square w-full object-cover" />
                     <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-xs font-medium">
                       Try on
                     </span>

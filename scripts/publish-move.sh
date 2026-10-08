@@ -5,7 +5,13 @@ cd "$(dirname "$0")/.."
 
 echo "Publishing from $(sui client active-address) on $(sui client active-env)…"
 if ! out=$(sui client publish move --gas-budget 200000000 --json 2>publish.err); then
-  cat publish.err >&2; rm -f publish.err; exit 1
+  # The CLI reports some failures (e.g. RPC timeouts) on stdout, so show both streams.
+  if grep -q "Transaction executed but checkpoint wait timed out" publish.err <<<"$out"; then
+    echo "The publish WENT THROUGH but the CLI timed out waiting for the checkpoint. Do not rerun;" >&2
+    echo "find the new package and Shop on https://suiscan.xyz/testnet/account/$(sui client active-address)" >&2
+    rm -f publish.err; exit 2
+  fi
+  cat publish.err >&2; echo "$out" >&2; rm -f publish.err; exit 1
 fi
 rm -f publish.err
 
