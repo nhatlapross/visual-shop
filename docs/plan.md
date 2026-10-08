@@ -13,7 +13,7 @@ The two parts only meet **on-chain**: Part 1 writes `Listing` objects and Part 2
 
 - Move contract published to testnet. IDs are in `src/deployment.json`, and the contract has 5 passing tests.
 - SDK layer: `createListingTx`, `buyTx` (uses `coinWithBalance`), `updateListingTx`, `fetchListings`, `fetchListing`, `fetchReceipts`, `uploadToWalrus`, `walrusUrl`, plus React Query hooks. Reads were verified against testnet.
-- **In progress (lead, merging soon):** 3D studio ported into `src/components/studio/` and rendered on `/sell`. It will hand over the finished model through `onModelReady({ glb, photo, candidate })`. Part 1 can start S1 against that interface now; pull `main` when it lands.
+- **Done:** 3D studio ported into `src/components/studio/` and rendered on `/sell` (one photo fits in about 3–30 s). `StudioPanel` calls `onModelReady({ glb, photo, candidate })` when the seller clicks "Use this model"; `SellPage` then shows a "3D model ready" card with the placeholder `TODO(seller lane)`, which is where S1–S3 go. Keep the `model` in `SellPage` state across upload retries, because "Start over" unmounts the studio and throws away its state.
 - **In progress (lead, merging soon):** webcam try-on ported into `src/components/tryon/ArTryOn.tsx` with props `{ modelUrl, title, onClose, onBuy?, priceLabel? }`, rendered on `/try-on/:id`. For testing, `/try-on/demo?model=/models/sample-glasses.glb` will also work. Part 2 should start with C1–C3 and C5–C6; C4 waits for this merge.
 - **Demo listing on testnet**, so Part 2 can start right away:
   - Listing `0xf565b751376c47403af4da6ab99f14c4699159fa37fc24d47c624ec7291c2580`, "Demo Frame · Classic Black", 0.1 SUI, stock 5.
@@ -21,7 +21,7 @@ The two parts only meet **on-chain**: Part 1 writes `Listing` objects and Part 2
 
 ## How we work
 
-- **Until the two ports land on `main`, do not edit** `src/pages/SellPage.tsx`, `src/components/studio/**`, `src/pages/TryOnPage.tsx` or `src/components/tryon/**`; the lead is rewriting them. Part 1: build the form as `src/components/seller/ListingForm.tsx` and wire it into `SellPage` after the merge. Part 2: everything except C4 is unaffected.
+- **The studio has landed**, so Part 1 owns `SellPage` and `src/components/studio/**` now. **Until the try-on lands, do not edit** `src/pages/TryOnPage.tsx` or `src/components/tryon/**`; the lead is rewriting them. Part 2: everything except C4 is unaffected.
 
 - **SDK note:** we use `@mysten/dapp-kit-react` 2.x on gRPC, not the old `@mysten/dapp-kit`. Public fullnodes reject JSON-RPC. Hooks: `useCurrentAccount`, `useCurrentClient`, `useDAppKit`. To send a transaction, call `useDAppKit().signAndExecuteTransaction({ transaction })` and treat `result.FailedTransaction` as an error. The SDK docs are in `node_modules/@mysten/dapp-kit-react/docs/`.
 - **Wallets:** use Slush on testnet, funded from https://faucet.sui.io. The faucet credits the *address balance*, so `sui client gas` shows nothing even when the wallet has funds.
