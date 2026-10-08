@@ -5,13 +5,13 @@ import { walrusUrl } from '@/lib/walrus'
 
 // Lane D owns this page (docs/plan.md, task D1).
 export function ShopPage() {
-  const { data: listings, isPending, error } = useListings()
+  const { data: listings, isLoading, error } = useListings()
 
   return (
     <section>
       <h1 className="mb-6 text-2xl font-semibold">Try before you buy</h1>
       {error && <p className="text-red-600">Could not load listings: {error.message}</p>}
-      {isPending && <p className="text-neutral-500">Loading listings…</p>}
+      {isLoading && <p className="text-neutral-500">Loading listings…</p>}
       {listings?.length === 0 && <p className="text-neutral-500">No eyewear listed yet. Be the first to sell.</p>}
       <ul className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
         {listings?.map((l) => (

@@ -4,8 +4,8 @@ import { useListing } from '@/hooks/useMarketplace'
 // Lane D owns this page (docs/plan.md, tasks D2–D3): 360° GLB viewer, "Try on" button, Buy with SUI.
 export function ListingPage() {
   const { id } = useParams()
-  const { data: listing, isPending } = useListing(id)
-  if (isPending) return <p className="text-neutral-500">Loading…</p>
+  const { data: listing, isLoading } = useListing(id)
+  if (isLoading) return <p className="text-neutral-500">Loading…</p>
   if (!listing) return <p>Listing not found.</p>
   return (
     <section>

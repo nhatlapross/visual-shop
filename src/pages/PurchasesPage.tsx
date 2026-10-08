@@ -1,10 +1,13 @@
+import { useCurrentAccount } from '@mysten/dapp-kit'
 import { useMyReceipts } from '@/hooks/useMarketplace'
 import { formatSui } from '@/lib/sui/format'
 
 // Lane D owns this page (docs/plan.md, task D4).
 export function PurchasesPage() {
-  const { data: receipts, isPending } = useMyReceipts()
-  if (isPending) return <p className="text-neutral-500">Connect your wallet to see purchases.</p>
+  const account = useCurrentAccount()
+  const { data: receipts, isLoading } = useMyReceipts()
+  if (!account) return <p className="text-neutral-500">Connect your wallet to see purchases.</p>
+  if (isLoading) return <p className="text-neutral-500">Loading purchases…</p>
   return (
     <section>
       <h1 className="mb-6 text-2xl font-semibold">My purchases</h1>
