@@ -5,7 +5,7 @@ Read [spec.md](spec.md) first (5 min). It fixes the contract, the data shapes an
 The work is split into **two parts with one owner each**:
 
 - **Part 1, Seller:** upload a product. Photos go into the 3D studio, then a listing form, then Walrus, then `create_listing`.
-- **Part 2, Store:** the customer side. Browse, view in 3D, try on, buy with SUI, see purchases.
+- **Part 2, Store:** the customer side. The landing page links into the store, which is a full-screen **fitting room** (`/store`): pick a frame from the catalog, try it on live, buy with SUI, see purchases.
 
 The two parts only meet **on-chain**: Part 1 writes `Listing` objects and Part 2 reads them. Neither part has to wait for the other.
 
@@ -14,21 +14,22 @@ The two parts only meet **on-chain**: Part 1 writes `Listing` objects and Part 2
 - Move contract published to testnet. IDs are in `src/deployment.json`, and the contract has 5 passing tests.
 - SDK layer: `createListingTx`, `buyTx` (uses `coinWithBalance`), `updateListingTx`, `fetchListings`, `fetchListing`, `fetchReceipts`, `uploadToWalrus`, `walrusUrl`, plus React Query hooks. Reads were verified against testnet.
 - **Done:** 3D studio ported into `src/components/studio/` and rendered on `/sell` (one photo fits in about 3–30 s). `StudioPanel` calls `onModelReady({ glb, photo, candidate })` when the seller clicks "Use this model"; `SellPage` then shows a "3D model ready" card with the placeholder `TODO(seller lane)`, which is where S1–S3 go. Keep the `model` in `SellPage` state across upload retries, because "Start over" unmounts the studio and throws away its state.
-- **In progress (lead, merging soon):** webcam try-on ported into `src/components/tryon/ArTryOn.tsx` with props `{ modelUrl, title, onClose, onBuy?, priceLabel? }`, rendered on `/try-on/:id`. For testing, `/try-on/demo?model=/models/sample-glasses.glb` will also work. Part 2 should start with C1–C3 and C5–C6; C4 waits for this merge.
+- **Done:** the home page (`ShopPage.tsx`) is now a landing page. "Enter the store" goes to `/store`, and frame cards go to `/store?frame=<id>`. The nav item "Store" also goes to `/store`.
+- **In progress (lead, merging soon):** the **fitting room** at `/store`, which is the eye-clinic try-on room with its catalog. It lives in `src/components/tryon/ArTryOn.tsx` with props `{ listings, initialListingId?, onBuy(listing), onClose? }` and is rendered full-screen by `src/pages/StorePage.tsx`. The catalog shows every on-chain listing, and Buy calls `onBuy`, which navigates to `/listing/:id` for now. `/try-on/:id` redirects to `/store?frame=:id`. Until it lands, `/store` shows a placeholder.
 - **Demo listing on testnet**, so Part 2 can start right away:
   - Listing `0xf565b751376c47403af4da6ab99f14c4699159fa37fc24d47c624ec7291c2580`, "Demo Frame · Classic Black", 0.1 SUI, stock 5.
   - To seed more: `scripts/seed-listing.sh <photo> <glb> "<title>" "<description>" <price_mist> <stock>`. It uses the deployer wallet in your local `sui client`.
 
 ## How we work
 
-- **The studio has landed**, so Part 1 owns `SellPage` and `src/components/studio/**` now. **Until the try-on lands, do not edit** `src/pages/TryOnPage.tsx` or `src/components/tryon/**`; the lead is rewriting them. Part 2: everything except C4 is unaffected.
+- **The studio has landed**, so Part 1 owns `SellPage` and `src/components/studio/**` now. **Until the fitting room lands, do not edit** `src/pages/{StorePage,TryOnPage}.tsx`, `src/components/tryon/**` or the routes in `src/App.tsx`; the lead is writing them. Part 2: everything except C4 is unaffected.
 
 - **SDK note:** we use `@mysten/dapp-kit-react` 2.x on gRPC, not the old `@mysten/dapp-kit`. Public fullnodes reject JSON-RPC. Hooks: `useCurrentAccount`, `useCurrentClient`, `useDAppKit`. To send a transaction, call `useDAppKit().signAndExecuteTransaction({ transaction })` and treat `result.FailedTransaction` as an error. The SDK docs are in `node_modules/@mysten/dapp-kit-react/docs/`.
 - **Wallets:** use Slush on testnet, funded from https://faucet.sui.io. The faucet credits the *address balance*, so `sui client gas` shows nothing even when the wallet has funds.
 - **Branches:** `seller/…` and `store/…`. Open small PRs to `main` at least every 45 min. Before merging, `pnpm build` and `pnpm test` must pass. Squash merge.
 - **File ownership:**
   - Part 1 owns `src/pages/SellPage.tsx`, `src/components/studio/**` and `src/components/seller/**`.
-  - Part 2 owns `src/pages/{ShopPage,ListingPage,TryOnPage,PurchasesPage}.tsx`, `src/components/tryon/**` and `src/components/store/**`.
+  - Part 2 owns `src/pages/{ShopPage,StorePage,ListingPage,TryOnPage,PurchasesPage}.tsx`, `src/components/tryon/**` and `src/components/store/**`.
   - Shared files: `src/types.ts`, `src/config.ts`, `src/deployment.json`, `src/lib/**`, `src/hooks/**` and `move/`. Change them in a separate small PR and tell the other person.
 - **Language:** every UI string is English.
 - **Secrets:** `.env*` is git-ignored. Every `VITE_*` value ships to the browser, so never put a key there.
@@ -49,11 +50,11 @@ The two parts only meet **on-chain**: Part 1 writes `Listing` objects and Part 2
 | ID | Task | Done when |
 |---|---|---|
 | C1 | **`ModelViewer`** in `src/components/store/`, built with three.js, `GLTFLoader`, `OrbitControls` and `createStudioEnvironment(renderer)` from `@/lib/eyewear-3d/environment`. Load from `walrusUrl(listing.modelBlobId)`; the aggregator serves CORS `*`. Auto-rotate until the user drags, fit the camera to the bounding box (studio GLBs are in meters), and dispose renderer, geometries and textures on unmount. | The demo listing's GLB rotates smoothly and the page has no WebGL leaks when you navigate back and forth. |
-| C2 | **Listing page:** photo plus viewer (tabs or side by side), title, description, price, stock left, seller (`shortAddress`), a **Try on** button linking to `/try-on/:id`, and a **Buy** button. | Looks demo-ready on desktop and mobile. |
+| C2 | **Listing page** (product detail; the fitting room's Buy lands here): photo plus viewer (tabs or side by side), title, description, price, stock left, seller (`shortAddress`), a **Try on** button linking to `/store?frame=:id`, and a **Buy** button. | Looks demo-ready on desktop and mobile. |
 | C3 | **Buy.** Call `signAndExecuteTransaction({ transaction: buyTx(listing, account.address) })`. On success, invalidate `['listings']`, `['listing', id]` and `['receipts']`, then show a success card with a Suiscan link. Disable Buy when stock is 0, when the listing is inactive, or when you are the seller. Map abort codes to messages: 1 → "Price changed, reload", 2 → "Sold out", 3 → "No longer for sale". With no wallet connected, show "Connect wallet to buy". | The buyer pays 0.1 SUI, stock goes from 5 to 4, and the seller's balance goes up. |
-| C4 | **Try-on page:** wire `onBuy` in `TryOnPage` to buy directly or to go back to the listing with Buy focused. Check that the try-on works with the demo listing at `/try-on/0xf565…2580`. | Users can try on and then buy without hunting for the button. |
+| C4 | **Buy from the fitting room:** after the room lands, make `onBuy` in `StorePage` buy in place (reuse the C3 logic as a `useBuyListing()` hook in `src/components/store/`), showing the success card over the room instead of leaving it. Check it with the demo listing at `/store?frame=0xf565…2580`. | Users can try on and buy without leaving the room. |
 | C5 | **Purchases page:** receipt cards with the photo (`walrusUrl(r.imageBlobId)`), title, price, a link to the listing and a Suiscan object link. | A purchase appears right after C3. |
-| C6 | **Shop page polish:** a hero line ("Try before you buy — eyewear in 3D, paid on Sui"), a "Try on" badge on cards, loading skeletons, empty and error states, mobile grid. | Looks demo-ready. |
+| C6 | **Landing page polish** (`ShopPage.tsx`, already rebuilt by the lead with the hero, "Enter the store" and "In the fitting room now"): loading skeleton for the frame row, error state, any visual polish. | Looks demo-ready on desktop and mobile. |
 
 ## Lead (deploy and demo)
 
@@ -75,7 +76,7 @@ The two parts only meet **on-chain**: Part 1 writes `Listing` objects and Part 2
 ## Integration checklist
 
 1. Seller wallet: open `/sell`, upload a photo, get a 3D model, publish at 0.1 SUI with stock 2.
-2. Buyer wallet: open Shop, open the listing, rotate the model, try it on, buy.
+2. Buyer wallet: open the landing page, enter the store, pick the new frame in the fitting room, try it on, buy.
 3. Stock shows 1, the buyer's Purchases page shows the receipt, and the seller has received 0.1 SUI.
 4. Repeat steps 1–3 on the deployed URL.
 

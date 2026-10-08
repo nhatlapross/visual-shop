@@ -10,16 +10,16 @@ export function Layout() {
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-10 border-b border-neutral-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4">
-          <NavLink to="/" className="flex items-center gap-2 font-semibold">
-            <Glasses className="size-5" /> Visual Shop
+        <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 sm:gap-6">
+          <NavLink to="/" className="flex shrink-0 items-center gap-2 font-semibold" aria-label="Visual Shop home">
+            <Glasses className="size-5" /> <span className="hidden sm:inline">Visual Shop</span>
           </NavLink>
-          <nav className="flex gap-4">
-            <NavLink to="/" end className={navClass}>Shop</NavLink>
+          <nav className="flex gap-3 whitespace-nowrap sm:gap-4">
+            <NavLink to="/store" className={navClass}>Store</NavLink>
             <NavLink to="/sell" className={navClass}>Sell</NavLink>
-            <NavLink to="/purchases" className={navClass}>My purchases</NavLink>
+            <NavLink to="/purchases" className={navClass}><span className="sm:hidden">Purchases</span><span className="hidden sm:inline">My purchases</span></NavLink>
           </nav>
-          <div className="ml-auto">
+          <div className="ml-auto shrink-0">
             <ConnectButton />
           </div>
         </div>
