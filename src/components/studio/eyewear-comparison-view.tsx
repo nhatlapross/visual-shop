@@ -48,6 +48,7 @@ export default function EyewearComparisonView({
   mode,
   onReady,
   importedFile,
+  fill,
 }: {
   candidate: ReconstructionCandidate;
   references: ReferenceImage[];
@@ -56,6 +57,8 @@ export default function EyewearComparisonView({
   mode: 'match' | 'overlay' | 'orbit' | 'front' | 'left' | 'right';
   onReady: (preview: EyewearPreview | null) => void;
   importedFile?: File | null;
+  /** Fill the parent box instead of following the reference photo's aspect ratio. */
+  fill?: boolean;
 }) {
   const container = useRef<HTMLDivElement>(null),
     [error, setError] = useState<string | null>(null);
@@ -183,7 +186,13 @@ export default function EyewearComparisonView({
             center = box.getCenter(new THREE.Vector3()),
             extent = box.getSize(new THREE.Vector3()).length();
           const yaw = mode === 'left' ? -0.65 : mode === 'right' ? 0.65 : 0;
-          const aspect = reference ? reference.width / reference.height : 1;
+          const frame = container.current;
+          const aspect =
+            fill && frame
+              ? frame.clientWidth / (frame.clientHeight || 1)
+              : reference
+                ? reference.width / reference.height
+                : 1;
           const distance =
             (extent * 0.56) /
             Math.sin(
@@ -312,13 +321,20 @@ export default function EyewearComparisonView({
     mode,
     onReady,
     importedFile,
+    fill,
   ]);
   return (
     <div
       className="relative overflow-hidden rounded-lg border border-neutral-200 bg-neutral-100"
-      style={{
-        aspectRatio: reference ? `${reference.width}/${reference.height}` : '1',
-      }}
+      style={
+        fill
+          ? { width: '100%', height: '100%' }
+          : {
+              aspectRatio: reference
+                ? `${reference.width}/${reference.height}`
+                : '1',
+            }
+      }
       data-testid="match-view"
     >
       {mode === 'overlay' && (

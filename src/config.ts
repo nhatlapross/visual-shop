@@ -10,6 +10,10 @@ export const config = {
   walrusPublisher: env.VITE_WALRUS_PUBLISHER ?? 'https://publisher.walrus-testnet.walrus.space',
   walrusAggregator: env.VITE_WALRUS_AGGREGATOR ?? 'https://aggregator.walrus-testnet.walrus.space',
   walrusEpochs: Number(env.VITE_WALRUS_EPOCHS ?? 5),
+  // Browser uploads use an *unsigned* preset that only accepts .glb into visual-shop/listings. Both values are
+  // public by design; the API key and secret never belong in this app.
+  cloudinaryCloudName: env.VITE_CLOUDINARY_CLOUD_NAME ?? 'bcu8tedb',
+  cloudinaryUploadPreset: env.VITE_CLOUDINARY_UPLOAD_PRESET ?? 'visual-shop-listings',
 }
 
 export const isContractConfigured = () => Boolean(config.packageId && config.shopId)
