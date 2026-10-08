@@ -1,22 +1,24 @@
 #!/usr/bin/env bash
-# Publishes move/ to the active Sui CLI env and writes the package + Shop IDs into .env.
+# Publishes move/ with the active Sui CLI address and writes the public IDs into src/deployment.json.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 echo "Publishing from $(sui client active-address) on $(sui client active-env)…"
-out=$(sui client publish move --gas-budget 200000000 --json)
+if ! out=$(sui client publish move --gas-budget 200000000 --json 2>publish.err); then
+  cat publish.err >&2; rm -f publish.err; exit 1
+fi
+rm -f publish.err
 
-ids=$(node -e '
-  const out = JSON.parse(require("fs").readFileSync(0, "utf8"));
-  const changes = out.objectChanges ?? out.changed_objects ?? [];
+node -e '
+  const fs = require("fs");
+  const raw = fs.readFileSync(0, "utf8");
+  const out = JSON.parse(raw.slice(raw.indexOf("{")));
+  const changes = out.objectChanges ?? [];
   const pkg = changes.find((c) => c.type === "published")?.packageId;
   const shop = changes.find((c) => c.type === "created" && /::marketplace::Shop$/.test(c.objectType ?? ""))?.objectId;
   if (!pkg || !shop) { console.error(JSON.stringify(out, null, 2)); process.exit(1); }
-  console.log(pkg + " " + shop);
-' <<<"$out")
-read -r pkg shop <<<"$ids"
-
-sed -i.bak -e "s/^VITE_PACKAGE_ID=.*/VITE_PACKAGE_ID=$pkg/" -e "s/^VITE_SHOP_ID=.*/VITE_SHOP_ID=$shop/" .env && rm .env.bak
-echo "VITE_PACKAGE_ID=$pkg"
-echo "VITE_SHOP_ID=$shop"
-echo "Updated .env — commit it so teammates use the same deployment."
+  const network = process.argv[1];
+  fs.writeFileSync("src/deployment.json", JSON.stringify({ network, packageId: pkg, shopId: shop, digest: out.digest }, null, 2) + "\n");
+  console.log(`packageId ${pkg}\nshopId    ${shop}`);
+' "$(sui client active-env)" <<<"$out"
+echo "Wrote src/deployment.json — commit it so teammates use the same deployment."

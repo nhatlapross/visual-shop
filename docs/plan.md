@@ -7,7 +7,7 @@ Read [spec.md](spec.md) first (5 min). It fixes the contract, the data shapes an
 - **SDK note:** this is `@mysten/dapp-kit-react` 2.x on gRPC, not the old `@mysten/dapp-kit` with `useSuiClientQuery`. Public fullnodes reject JSON-RPC. Hooks: `useCurrentAccount`, `useCurrentClient`, `useDAppKit`. Docs are in `node_modules/@mysten/dapp-kit-react/docs/`.
 
 - **One lane per person.** Each lane owns its own files. Ask in chat before you edit a file you don't own.
-- **Shared files:** `src/types.ts`, `src/config.ts`, `src/lib/sui/marketplace.ts`, `src/lib/walrus.ts`, `src/hooks/useMarketplace.ts`, `move/`, `.env`. Change them in a small PR of their own and announce it.
+- **Shared files:** `src/types.ts`, `src/config.ts`, `src/lib/sui/marketplace.ts`, `src/lib/walrus.ts`, `src/hooks/useMarketplace.ts`, `move/`, `src/deployment.json`. Change them in a small PR of their own and announce it.
 - **Branches:** `lane-a/…`, `lane-b/…`, `lane-c/…`, `lane-d/…`. Push small PRs to `main` often, at least every 45 min. Squash merge; whoever opened the PR merges it after `pnpm build` and `pnpm test` pass.
 - **Ported code:** move a file out of `port/` into `src/`, adapt it, and delete it from `port/` in the same PR.
 - **Language:** every UI string is English. Translate the Vietnamese strings while porting, and comments too where they help.
@@ -18,7 +18,7 @@ Read [spec.md](spec.md) first (5 min). It fixes the contract, the data shapes an
 | Time | Milestone |
 |---|---|
 | T+0:00 | Skeleton pushed: contract written and tested, SDK layer and routes in place. Lanes start. |
-| T+0:20 | **A1** contract published to testnet and `.env` committed. Everyone pulls. |
+| T+0:20 | **A1** contract published to testnet and `src/deployment.json` committed. Everyone pulls. |
 | T+2:30 | Lanes B, C and D each have their page working on their own. |
 | T+3:00 | **Integration:** full demo flow on testnet with two wallets (seller and buyer). |
 | T+3:45 | Demo listings seeded, site deployed, README screenshots. |
@@ -29,7 +29,7 @@ Read [spec.md](spec.md) first (5 min). It fixes the contract, the data shapes an
 
 | ID | Task | Files | Done when |
 |---|---|---|---|
-| A1 | Fund the deployer address at https://faucet.sui.io (testnet). Run `pnpm test:move` and then `pnpm publish:move`. Commit `.env` and `move/Move.lock` / `move/Published.toml`. | `.env`, `move/` | The banner disappears in `pnpm dev` and Shop shows "No eyewear listed yet". |
+| A1 | Fund the deployer address at https://faucet.sui.io (testnet). Run `pnpm test:move` and then `pnpm publish:move`. Commit `src/deployment.json` and `move/Move.lock` / `move/Published.toml`. | `src/deployment.json`, `move/` | The banner disappears in `pnpm dev` and Shop shows "No eyewear listed yet". |
 | A2 | Create 2 funded demo wallets (seller and buyer) in Slush on testnet and share them with the team. | — | Both wallets hold ≥ 1 SUI. |
 | A3 | Deploy the static site. First choice: Walrus Sites (`site-builder publish dist`, with a `ws-resources.json` route `"/*": "/index.html"` for client-side routing). Fallback: Vercel with a SPA rewrite. | `ws-resources.json` or `vercel.json` | The public URL loads the shop and connects a wallet. |
 | A4 | Seed 3 listings using the Sell flow (photos in `public/glasses/` and any frames you have). | — | Shop shows 3 cards with photos and 3D. |
@@ -76,5 +76,5 @@ pnpm dev            # http://localhost:5173
 pnpm build          # type-check + production build
 pnpm test           # Vitest (eyewear-3d lib, 355 tests)
 pnpm test:move      # Move unit tests
-pnpm publish:move   # publish contract to the active `sui client` env, write IDs into .env
+pnpm publish:move   # publish contract to the active `sui client` env, write IDs into src/deployment.json
 ```

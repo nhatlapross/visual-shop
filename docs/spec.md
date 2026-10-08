@@ -53,7 +53,7 @@ Browser (static Vite app)
 
 ## 5. Frontend contracts (shared; change only with a heads-up to the team)
 
-- `src/config.ts` reads `VITE_*` from `.env`. `.env` is committed because it holds only public IDs.
+- `src/config.ts` reads public IDs from `src/deployment.json` (committed, written by `pnpm publish:move`). Optional `VITE_*` overrides go in `.env.local`. All `.env*` files are git-ignored. This is a static site, so **never put a private key in any `VITE_*` variable**.
 - `src/types.ts` defines `Listing`, `Receipt` and `NewListingInput`.
 - `src/dapp-kit.ts` creates the dApp Kit instance (gRPC client per network).
 - `src/lib/sui/marketplace.ts` provides `createListingTx`, `buyTx`, `updateListingTx`, `fetchListings`, `fetchListing` and `fetchReceipts`. Its `ShopBcs`, `ListingBcs` and `ReceiptBcs` must match the Move structs field for field, so update both together.

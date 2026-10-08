@@ -12,6 +12,19 @@ dist
 dist-ssr
 *.local
 
+# Secrets: never commit env files, keys or wallets. Public deployment IDs live in src/deployment.json.
+.env
+.env.*
+!.env.example
+*.keystore
+sui.keystore
+*.key
+*.pem
+*.p12
+secret/
+secrets/
+.sui/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -25,3 +38,4 @@ dist-ssr
 
 # Move build output
 move/build
+publish.err

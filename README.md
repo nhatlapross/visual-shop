@@ -36,4 +36,4 @@ docs/                     spec.md, plan.md
 | `pnpm build` | Type-check and production build to `dist/` |
 | `pnpm test` | Vitest suite for the 3D library |
 | `pnpm test:move` | Move unit tests |
-| `pnpm publish:move` | Publish the contract with the active `sui client` address and write the IDs into `.env` |
+| `pnpm publish:move` | Publish the contract with the active `sui client` address and write the public IDs into `src/deployment.json` |
