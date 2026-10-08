@@ -236,12 +236,12 @@ export function ArTryOn({ listings, initialListingId, onBuy, onClose }: ArTryOnP
   }, [hasSource])
 
   // Latest values for the animation loops, which must not re-subscribe on every render.
-  const live = useRef({ facingMode, isPhotoMode, scanPercent: 0, isInitialScanning })
+  const live = useRef({ facingMode, isPhotoMode, scanPercent: 0, isInitialScanning, isTrackingFace: false })
   const manualRef = useRef({ scale: 1, offsetX: 0, offsetY: 0, offsetZ: 0, tilt: 0 })
   manualRef.current = { scale: manualScale, offsetX: manualOffsetX, offsetY: manualOffsetY, offsetZ: manualOffsetZ, tilt: manualTilt }
 
   const scanPercent = Math.min(100, Math.round((scanElapsedMs / SCAN_TOTAL_MS) * 100))
-  live.current = { facingMode, isPhotoMode, scanPercent, isInitialScanning }
+  live.current = { facingMode, isPhotoMode, scanPercent, isInitialScanning, isTrackingFace }
 
   /** The uploaded photo is shown unmirrored; the front camera is mirrored. */
   const isMirrored = () => !live.current.isPhotoMode && live.current.facingMode === 'user'
@@ -269,7 +269,8 @@ export function ArTryOn({ listings, initialListingId, onBuy, onClose }: ArTryOnP
     toastTimerRef.current = setTimeout(() => setScanJustCompleted(false), 4500)
   }, [])
 
-  // Run the scan sequence whenever the camera starts or a photo is loaded.
+  // Run the scan whenever the camera starts or a photo is loaded. It only advances while a face is
+  // visible: it waits until one appears and pauses if it leaves the frame.
   useEffect(() => {
     if (scanTimerRef.current) clearInterval(scanTimerRef.current)
     if (!hasSource) {
@@ -279,11 +280,16 @@ export function ArTryOn({ listings, initialListingId, onBuy, onClose }: ArTryOnP
     setIsInitialScanning(true)
     setScanElapsedMs(0)
     setScanJustCompleted(false)
-    const startTime = Date.now()
+    let elapsed = 0
+    let last = Date.now()
     scanTimerRef.current = setInterval(() => {
-      const elapsed = Date.now() - startTime
-      if (elapsed >= SCAN_TOTAL_MS) finishScan()
-      else setScanElapsedMs(elapsed)
+      const now = Date.now()
+      if (live.current.isTrackingFace) {
+        elapsed += now - last
+        if (elapsed >= SCAN_TOTAL_MS) finishScan()
+        else setScanElapsedMs(elapsed)
+      }
+      last = now
     }, 100)
     return () => {
       if (scanTimerRef.current) clearInterval(scanTimerRef.current)
@@ -294,13 +300,20 @@ export function ArTryOn({ listings, initialListingId, onBuy, onClose }: ArTryOnP
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
   }, [])
 
+  const scanWaiting = isInitialScanning && hasSource && !isTrackingFace
   const scanStageInfo = useMemo(() => {
+    if (scanWaiting && scanElapsedMs === 0) {
+      return isPhotoMode
+        ? { title: 'Looking for a face', subtitle: 'Finding the face in your photo. If it takes long, try a clear front-facing one or skip.' }
+        : { title: 'Looking for your face', subtitle: 'Center your face in the frame to start the scan.' }
+    }
+    if (scanWaiting) return { title: 'Face lost', subtitle: 'Look at the camera to continue the scan.' }
     if (scanPercent < 22) return { title: 'Starting face scan', subtitle: 'Mapping 468 facial landmarks in real time...' }
     if (scanPercent < 45) return { title: 'Measuring proportions', subtitle: 'Forehead, cheekbone and jaw width...' }
     if (scanPercent < 68) return { title: 'Measuring eye distance', subtitle: 'Locating the eye centres and head angle...' }
     if (scanPercent < 90) return { title: 'Analysing face shape', subtitle: 'Comparing facial proportions...' }
     return { title: 'Analysis complete!', subtitle: `Fitting ${title} to your face...` }
-  }, [scanPercent, title])
+  }, [scanPercent, title, scanWaiting, scanElapsedMs, isPhotoMode])
 
   // Face-mesh wireframe drawn while scanning.
   useEffect(() => {
@@ -906,12 +919,12 @@ export function ArTryOn({ listings, initialListingId, onBuy, onClose }: ArTryOnP
                   transform: `translate(-50%, -50%) rotate(${facePose.detected ? facePose.rollDeg : 0}deg)`,
                 }}
               >
-                <div className="scan-laser-sweep" />
+                {!scanWaiting && <div className="scan-laser-sweep" />}
                 <span className="scan-corner sc-tl" />
                 <span className="scan-corner sc-tr" />
                 <span className="scan-corner sc-bl" />
                 <span className="scan-corner sc-br" />
-                <div className="scan-mesh-grid-anim">
+                <div className={`scan-mesh-grid-anim ${scanWaiting ? 'opacity-0' : ''}`}>
                   <div className="mesh-ring mr-1" />
                   <div className="mesh-ring mr-2" />
                   <div className="mesh-crosshair" />
@@ -942,7 +955,7 @@ export function ArTryOn({ listings, initialListingId, onBuy, onClose }: ArTryOnP
                       ))}
                     </div>
                     <div className="sci-track-bottom-row">
-                      <span className="sci-loading-ticker">SCANNING...</span>
+                      <span className="sci-loading-ticker">{scanWaiting ? 'WAITING FOR A FACE...' : 'SCANNING...'}</span>
                       <button type="button" onClick={finishScan} className="sci-skip-link">
                         Skip ➔
                       </button>
@@ -1190,7 +1203,7 @@ export function ArTryOn({ listings, initialListingId, onBuy, onClose }: ArTryOnP
                             type={frame.listing.imageType}
                             alt={frame.title}
                             width={240}
-                            turned={isSelected}
+                            raised={isSelected}
                             className="h-full w-full"
                           />
                         </div>

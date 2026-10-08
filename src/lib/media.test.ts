@@ -7,14 +7,8 @@ test('Cloudinary GLB renders to a trimmed transparent PNG', () => {
   expect(thumbnailUrl(glb, 'glb', 400)).toBe(`${base}e_trim/w_400,c_fit/v1/visual-shop/catalog/frame-1.png`)
 })
 
-test('the angle view turns the camera before rendering', () => {
-  expect(thumbnailUrl(glb, 'glb', 400, 'angle')).toBe(
-    `${base}e_camera:up_12;right_-28/e_trim/w_400,c_fit/v1/visual-shop/catalog/frame-1.png`,
-  )
-})
-
 test('images are their own thumbnail; GLBs elsewhere have none', () => {
-  expect(thumbnailUrl('https://x.test/a.png', 'png', 400, 'angle')).toBe('https://x.test/a.png')
+  expect(thumbnailUrl('https://x.test/a.png', 'png', 400)).toBe('https://x.test/a.png')
   expect(thumbnailUrl('https://x.test/a.glb', 'glb')).toBe('')
 })
 
