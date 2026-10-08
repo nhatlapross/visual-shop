@@ -41,7 +41,8 @@ import {
 import { startGlassesOverlay, type GlassesOverlay, type SmoothedPose } from './glassesOverlay'
 import { LISTING_STATUS, type Listing } from '@/types'
 import { formatSui } from '@/lib/sui/format'
-import { modelUrl, thumbnailUrl } from '@/lib/media'
+import { FrameThumb } from '@/components/FrameThumb'
+import { modelUrl } from '@/lib/media'
 import { FrameViewerModal } from './FrameViewerModal'
 import './tryon.css'
 
@@ -60,7 +61,6 @@ interface FrameItem {
   priceLabel: string
   stockLabel: string
   soldOut: boolean
-  image: string
   /** GLB (front along +z, any unit); empty when the listing's media is not a GLB. */
   modelUrl: string
 }
@@ -74,7 +74,6 @@ function toFrameItem(listing: Listing): FrameItem {
     priceLabel: `${formatSui(listing.price)} SUI`,
     stockLabel: soldOut ? 'Sold out' : `${listing.stock} in stock`,
     soldOut,
-    image: thumbnailUrl(listing.imageUrl, listing.imageType, 300),
     modelUrl: modelUrl(listing.imageUrl, listing.imageType),
   }
 }
@@ -1170,7 +1169,7 @@ export function ArTryOn({ listings, initialListingId, onBuy, onClose }: ArTryOnP
                     return (
                       <div
                         key={frame.id}
-                        className={`ar-glasses-carousel-card ${isSelected ? 'is-selected' : ''} ${frame.soldOut ? 'is-sold-out' : ''}`}
+                        className={`ar-glasses-carousel-card group ${isSelected ? 'is-selected' : ''} ${frame.soldOut ? 'is-sold-out' : ''}`}
                         onClick={() => setSelectedId(frame.id)}
                         role="button"
                         tabIndex={0}
@@ -1186,7 +1185,14 @@ export function ArTryOn({ listings, initialListingId, onBuy, onClose }: ArTryOnP
                           <span className="carousel-card-price">{frame.soldOut ? 'Sold out' : frame.priceLabel}</span>
                         </div>
                         <div className="carousel-card-preview">
-                          <img src={frame.image} alt={frame.title} className="w-full h-full object-contain filter drop-shadow-md" draggable={false} />
+                          <FrameThumb
+                            url={frame.listing.imageUrl}
+                            type={frame.listing.imageType}
+                            alt={frame.title}
+                            width={240}
+                            turned={isSelected}
+                            className="h-full w-full"
+                          />
                         </div>
                         {isSelected && (
                           <div className="carousel-selected-tick">

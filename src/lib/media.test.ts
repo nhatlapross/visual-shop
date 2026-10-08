@@ -1,15 +1,20 @@
 import { modelUrl, thumbnailUrl } from './media'
 
 const glb = 'https://res.cloudinary.com/demo/image/upload/v1/visual-shop/catalog/frame-1.glb'
+const base = 'https://res.cloudinary.com/demo/image/upload/'
 
-test('Cloudinary GLB gets a rendered PNG thumbnail', () => {
-  expect(thumbnailUrl(glb, 'glb', 400)).toBe(
-    'https://res.cloudinary.com/demo/image/upload/w_400,h_400,c_pad,b_white/v1/visual-shop/catalog/frame-1.png',
+test('Cloudinary GLB renders to a trimmed transparent PNG', () => {
+  expect(thumbnailUrl(glb, 'glb', 400)).toBe(`${base}e_trim/w_400,c_fit/v1/visual-shop/catalog/frame-1.png`)
+})
+
+test('the angle view turns the camera before rendering', () => {
+  expect(thumbnailUrl(glb, 'glb', 400, 'angle')).toBe(
+    `${base}e_camera:up_12;right_-28/e_trim/w_400,c_fit/v1/visual-shop/catalog/frame-1.png`,
   )
 })
 
 test('images are their own thumbnail; GLBs elsewhere have none', () => {
-  expect(thumbnailUrl('https://x.test/a.png', 'png')).toBe('https://x.test/a.png')
+  expect(thumbnailUrl('https://x.test/a.png', 'png', 400, 'angle')).toBe('https://x.test/a.png')
   expect(thumbnailUrl('https://x.test/a.glb', 'glb')).toBe('')
 })
 

@@ -1,7 +1,7 @@
 import { ArrowRight, Box, Camera, Wallet } from 'lucide-react'
 import { Link } from 'react-router'
 import { useListings } from '@/hooks/useMarketplace'
-import { thumbnailUrl } from '@/lib/media'
+import { FrameThumb } from '@/components/FrameThumb'
 import { formatSui } from '@/lib/sui/format'
 import { LISTING_STATUS } from '@/types'
 
@@ -9,6 +9,14 @@ const steps = [
   { icon: Box, title: 'Built from real photos', text: 'Sellers upload a photo of the frame and get a 3D model buyers can try on.' },
   { icon: Camera, title: 'Try it on your face', text: 'Step into the fitting room and see every frame live through your camera.' },
   { icon: Wallet, title: 'Pay in SUI', text: 'Checkout is one transaction on Sui. Your receipt lives in your wallet.' },
+]
+
+// Soft backdrops that the transparent frame renders float on, one per card.
+const backdrops = [
+  'from-sky-100 via-indigo-50 to-violet-100',
+  'from-amber-100 via-orange-50 to-rose-100',
+  'from-emerald-100 via-teal-50 to-cyan-100',
+  'from-fuchsia-100 via-pink-50 to-amber-50',
 ]
 
 // Landing page. The store itself is the full-screen fitting room at /store.
@@ -54,14 +62,18 @@ export function ShopPage() {
             </Link>
           </div>
           <ul className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            {available.slice(0, 4).map((l) => (
+            {available.slice(0, 4).map((l, i) => (
               <li key={l.id}>
                 <Link
                   to={`/store?frame=${l.id}`}
-                  className="group block overflow-hidden rounded-xl border border-neutral-200 bg-white"
+                  className="group block overflow-hidden rounded-xl border border-neutral-200 bg-white transition-shadow hover:shadow-lg"
                 >
-                  <div className="relative">
-                    <img src={thumbnailUrl(l.imageUrl, l.imageType, 600)} alt={l.title} className="aspect-square w-full object-cover" />
+                  <div className={`relative aspect-square bg-gradient-to-br ${backdrops[i % backdrops.length]}`}>
+                    {/* Ground shadow that stays put while the frame floats above it. */}
+                    <div className="absolute inset-x-[22%] bottom-[24%] h-3 rounded-[50%] bg-black/10 blur-md transition-transform duration-500 group-hover:scale-x-110" />
+                    <div className="absolute inset-[12%] motion-safe:animate-float" style={{ animationDelay: `${i * -1.2}s` }}>
+                      <FrameThumb url={l.imageUrl} type={l.imageType} alt={l.title} width={600} className="h-full w-full" />
+                    </div>
                     <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-xs font-medium">
                       Try on
                     </span>

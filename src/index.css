@@ -8,3 +8,17 @@
 body {
   @apply bg-neutral-50 text-neutral-900 antialiased;
 }
+
+@theme {
+  --animate-float: float 5s ease-in-out infinite;
+
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-6px);
+    }
+  }
+}
