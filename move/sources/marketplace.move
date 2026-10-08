@@ -1,5 +1,5 @@
-/// Visual Shop marketplace: sellers list eyewear (photo + 3D model stored on Walrus),
-/// buyers pay in SUI and receive a Receipt object as proof of purchase.
+/// Visual Shop marketplace: sellers list eyewear (one media file hosted off-chain, referenced by
+/// URL), buyers pay in SUI and receive a Receipt object as proof of purchase.
 module visual_shop::marketplace;
 
 use std::string::String;
@@ -12,6 +12,11 @@ const EWrongPayment: u64 = 1;
 const EOutOfStock: u64 = 2;
 const EInactive: u64 = 3;
 const EInvalidPrice: u64 = 4;
+const EInvalidStatus: u64 = 5;
+
+/// Listing lifecycle. Stored as u8 so more states can be added without changing the layout.
+const STATUS_ACTIVE: u8 = 0;
+const STATUS_CLOSED: u8 = 1;
 
 /// Shared registry of every listing ID, so the frontend can load the catalog with one read.
 public struct Shop has key {
@@ -29,11 +34,12 @@ public struct Listing has key {
     price: u64,
     stock: u64,
     sold: u64,
-    /// Walrus blob ID of the product photo.
-    image_blob_id: String,
-    /// Walrus blob ID of the GLB model used by the viewer and try-on.
-    model_blob_id: String,
-    active: bool,
+    /// `STATUS_ACTIVE` (0) or `STATUS_CLOSED` (1); only active listings can be bought.
+    status: u8,
+    /// Link to the product media (png, jpg, webp, svg, glb, ...).
+    image_url: String,
+    /// File format of `image_url` ("png", "svg", "glb", ...); tells the UI how to render it.
+    image_type: String,
 }
 
 /// Owned by the buyer after a purchase.
@@ -44,8 +50,8 @@ public struct Receipt has key, store {
     buyer: address,
     price: u64,
     title: String,
-    image_blob_id: String,
-    model_blob_id: String,
+    image_url: String,
+    image_type: String,
 }
 
 public struct ListingCreated has copy, drop {
@@ -58,7 +64,7 @@ public struct ListingUpdated has copy, drop {
     listing_id: ID,
     price: u64,
     stock: u64,
-    active: bool,
+    status: u8,
 }
 
 public struct Purchased has copy, drop {
@@ -73,14 +79,16 @@ fun init(ctx: &mut TxContext) {
     transfer::share_object(Shop { id: object::new(ctx), listings: vector[] });
 }
 
+// === Sell ===
+
 public fun create_listing(
     shop: &mut Shop,
     title: String,
     description: String,
     price: u64,
     stock: u64,
-    image_blob_id: String,
-    model_blob_id: String,
+    image_url: String,
+    image_type: String,
     ctx: &mut TxContext,
 ): ID {
     assert!(price > 0, EInvalidPrice);
@@ -92,9 +100,9 @@ public fun create_listing(
         price,
         stock,
         sold: 0,
-        image_blob_id,
-        model_blob_id,
-        active: true,
+        status: STATUS_ACTIVE,
+        image_url,
+        image_type,
     };
     let listing_id = object::id(&listing);
     shop.listings.push_back(listing_id);
@@ -103,10 +111,28 @@ public fun create_listing(
     listing_id
 }
 
+public fun update_listing(
+    listing: &mut Listing,
+    price: u64,
+    stock: u64,
+    status: u8,
+    ctx: &TxContext,
+) {
+    assert!(ctx.sender() == listing.seller, ENotSeller);
+    assert!(price > 0, EInvalidPrice);
+    assert!(status == STATUS_ACTIVE || status == STATUS_CLOSED, EInvalidStatus);
+    listing.price = price;
+    listing.stock = stock;
+    listing.status = status;
+    event::emit(ListingUpdated { listing_id: object::id(listing), price, stock, status });
+}
+
+// === Buy ===
+
 /// Pays the seller and returns a Receipt. `payment` must equal `price` exactly;
 /// the caller splits it from gas and transfers the Receipt to themselves in the same PTB.
 public fun buy(listing: &mut Listing, payment: Coin<SUI>, ctx: &mut TxContext): Receipt {
-    assert!(listing.active, EInactive);
+    assert!(listing.status == STATUS_ACTIVE, EInactive);
     assert!(listing.stock > 0, EOutOfStock);
     assert!(payment.value() == listing.price, EWrongPayment);
 
@@ -121,8 +147,8 @@ public fun buy(listing: &mut Listing, payment: Coin<SUI>, ctx: &mut TxContext): 
         buyer: ctx.sender(),
         price: listing.price,
         title: listing.title,
-        image_blob_id: listing.image_blob_id,
-        model_blob_id: listing.model_blob_id,
+        image_url: listing.image_url,
+        image_type: listing.image_type,
     };
     event::emit(Purchased {
         listing_id: receipt.listing_id,
@@ -132,21 +158,6 @@ public fun buy(listing: &mut Listing, payment: Coin<SUI>, ctx: &mut TxContext): 
         price: receipt.price,
     });
     receipt
-}
-
-public fun update_listing(
-    listing: &mut Listing,
-    price: u64,
-    stock: u64,
-    active: bool,
-    ctx: &TxContext,
-) {
-    assert!(ctx.sender() == listing.seller, ENotSeller);
-    assert!(price > 0, EInvalidPrice);
-    listing.price = price;
-    listing.stock = stock;
-    listing.active = active;
-    event::emit(ListingUpdated { listing_id: object::id(listing), price, stock, active });
 }
 
 // === Getters ===
@@ -161,7 +172,15 @@ public fun sold(listing: &Listing): u64 { listing.sold }
 
 public fun seller(listing: &Listing): address { listing.seller }
 
-public fun is_active(listing: &Listing): bool { listing.active }
+public fun status(listing: &Listing): u8 { listing.status }
+
+public fun image_url(listing: &Listing): String { listing.image_url }
+
+public fun image_type(listing: &Listing): String { listing.image_type }
+
+public fun status_active(): u8 { STATUS_ACTIVE }
+
+public fun status_closed(): u8 { STATUS_CLOSED }
 
 public fun receipt_listing_id(receipt: &Receipt): ID { receipt.listing_id }
 
