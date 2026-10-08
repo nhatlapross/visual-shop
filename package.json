@@ -10,7 +10,7 @@
     "lint": "oxlint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:move": "sui move test --path move",
+    "test:move": "sui move test --path move --build-env testnet",
     "publish:move": "bash scripts/publish-move.sh"
   },
   "dependencies": {

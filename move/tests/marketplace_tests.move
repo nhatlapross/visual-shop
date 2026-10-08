@@ -21,8 +21,8 @@ fun setup_listing(scenario: &mut Scenario, stock: u64) {
         b"Acetate frame".to_string(),
         PRICE,
         stock,
-        b"img-blob".to_string(),
-        b"glb-blob".to_string(),
+        b"https://res.cloudinary.com/demo/image/upload/frame.glb".to_string(),
+        b"glb".to_string(),
         scenario.ctx(),
     );
     assert_eq!(shop.listing_ids().length(), 1);
@@ -91,7 +91,7 @@ fun buy_rejects_inactive_listing() {
     setup_listing(&mut scenario, 1);
     scenario.next_tx(SELLER);
     let mut listing = scenario.take_shared<Listing>();
-    marketplace::update_listing(&mut listing, PRICE, 1, false, scenario.ctx());
+    marketplace::update_listing(&mut listing, PRICE, 1, marketplace::status_closed(), scenario.ctx());
     ts::return_shared(listing);
 
     scenario.next_tx(BUYER);
@@ -109,7 +109,45 @@ fun only_seller_can_update() {
     setup_listing(&mut scenario, 1);
     scenario.next_tx(BUYER);
     let mut listing = scenario.take_shared<Listing>();
-    marketplace::update_listing(&mut listing, 1, 1, true, scenario.ctx());
+    marketplace::update_listing(&mut listing, 1, 1, marketplace::status_active(), scenario.ctx());
+    ts::return_shared(listing);
+    scenario.end();
+}
+
+#[test]
+fun create_listing_stores_media_and_starts_active() {
+    let mut scenario = ts::begin(SELLER);
+    setup_listing(&mut scenario, 3);
+    scenario.next_tx(BUYER);
+    let listing = scenario.take_shared<Listing>();
+    assert_eq!(listing.status(), marketplace::status_active());
+    assert_eq!(listing.image_url(), b"https://res.cloudinary.com/demo/image/upload/frame.glb".to_string());
+    assert_eq!(listing.image_type(), b"glb".to_string());
+    ts::return_shared(listing);
+    scenario.end();
+}
+
+#[test]
+fun seller_can_close_and_reopen() {
+    let mut scenario = ts::begin(SELLER);
+    setup_listing(&mut scenario, 1);
+    scenario.next_tx(SELLER);
+    let mut listing = scenario.take_shared<Listing>();
+    marketplace::update_listing(&mut listing, PRICE, 1, marketplace::status_closed(), scenario.ctx());
+    assert_eq!(listing.status(), marketplace::status_closed());
+    marketplace::update_listing(&mut listing, PRICE, 1, marketplace::status_active(), scenario.ctx());
+    assert_eq!(listing.status(), marketplace::status_active());
+    ts::return_shared(listing);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = marketplace::EInvalidStatus)]
+fun update_rejects_unknown_status() {
+    let mut scenario = ts::begin(SELLER);
+    setup_listing(&mut scenario, 1);
+    scenario.next_tx(SELLER);
+    let mut listing = scenario.take_shared<Listing>();
+    marketplace::update_listing(&mut listing, PRICE, 1, 2, scenario.ctx());
     ts::return_shared(listing);
     scenario.end();
 }
