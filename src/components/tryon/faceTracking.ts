@@ -1,4 +1,6 @@
-// MediaPipe FaceMesh loading, landmark constants and face-shape classification for the try-on.
+// Face tracking (MediaPipe Tasks FaceLandmarker), landmark constants and face-shape classification for the try-on.
+import type { FaceLandmarker as FaceLandmarkerTask } from '@mediapipe/tasks-vision'
+import { getVisionFileset, withGpuFallback } from './mediapipeVision'
 
 export type Landmark = { x: number; y: number; z: number }
 
@@ -24,43 +26,59 @@ export interface FaceMetrics {
 
 export const DEFAULT_FACE_METRICS: FaceMetrics = { ratio: 1.35, jawRatio: 78, foreheadRatio: 85, chinAngle: 72 }
 
-/** Pinned so a new MediaPipe release can't break the try-on. Used for the script and its wasm/data files. */
-export const MEDIAPIPE_FACE_MESH_BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/'
+const FACE_MODEL_URL =
+  'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'
 
-let scriptPromise: Promise<boolean> | null = null
-
-/** Loads the FaceMesh UMD script once and resolves true when `window.FaceMesh` is available. */
-export function loadFaceMeshScript(): Promise<boolean> {
-  if ((window as any).FaceMesh) return Promise.resolve(true)
-  if (scriptPromise) return scriptPromise
-  scriptPromise = new Promise((resolve) => {
-    const script = document.createElement('script')
-    script.src = `${MEDIAPIPE_FACE_MESH_BASE}face_mesh.js`
-    script.crossOrigin = 'anonymous'
-    script.onload = () => resolve(Boolean((window as any).FaceMesh))
-    script.onerror = () => {
-      console.warn('[Try-on] Failed to load the MediaPipe FaceMesh script')
-      scriptPromise = null
-      script.remove()
-      resolve(false)
-    }
-    document.head.appendChild(script)
-  })
-  return scriptPromise
+/** Results in the shape the try-on expects (the legacy FaceMesh `onResults` payload). */
+export interface FaceResults {
+  multiFaceLandmarks: Landmark[][]
 }
 
-export function createFaceMesh(onResults: (results: any) => void): any {
-  const faceMesh = new (window as any).FaceMesh({
-    locateFile: (file: string) => `${MEDIAPIPE_FACE_MESH_BASE}${file}`,
-  })
-  faceMesh.setOptions({
-    maxNumFaces: 1,
-    refineLandmarks: true,
-    minDetectionConfidence: 0.5,
-    minTrackingConfidence: 0.5,
-  })
-  faceMesh.onResults(onResults)
-  return faceMesh
+export interface FaceTracker {
+  /** Detects on a video frame (tracking mode) or a still image, then calls `onResults`. */
+  send(input: { image: HTMLVideoElement | HTMLImageElement }): Promise<void>
+  close(): void
+}
+
+/**
+ * Face tracking on MediaPipe Tasks `FaceLandmarker`: same 468-point mesh (plus irises) as the
+ * legacy FaceMesh, but on the shared Tasks runtime so it can run next to hand tracking.
+ */
+export async function createFaceTracker(onResults: (results: FaceResults) => void): Promise<FaceTracker> {
+  const [{ FaceLandmarker }, fileset] = await Promise.all([import('@mediapipe/tasks-vision'), getVisionFileset()])
+  const create = (runningMode: 'VIDEO' | 'IMAGE') =>
+    withGpuFallback<FaceLandmarkerTask>((delegate) =>
+      FaceLandmarker.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: FACE_MODEL_URL, delegate },
+        runningMode,
+        numFaces: 1,
+        minFaceDetectionConfidence: 0.5,
+        minFacePresenceConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      }),
+    )
+  const video = await create('VIDEO')
+  let image: FaceLandmarkerTask | null = null
+  let lastTimestamp = 0
+
+  return {
+    async send({ image: source }) {
+      let result
+      if (source instanceof HTMLVideoElement) {
+        // detectForVideo needs strictly increasing timestamps.
+        lastTimestamp = Math.max(lastTimestamp + 1, performance.now())
+        result = video.detectForVideo(source, lastTimestamp)
+      } else {
+        image ??= await create('IMAGE')
+        result = image.detect(source)
+      }
+      onResults({ multiFaceLandmarks: result.faceLandmarks })
+    },
+    close() {
+      video.close()
+      image?.close()
+    },
+  }
 }
 
 /**

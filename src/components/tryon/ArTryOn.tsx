@@ -12,6 +12,7 @@ import {
   CloudUpload,
   Download,
   Glasses,
+  Hand,
   Info,
   Minus,
   Plus,
@@ -28,12 +29,12 @@ import {
 import {
   classifyFaceShape,
   coverSize,
-  createFaceMesh,
+  createFaceTracker,
+  type FaceTracker,
   DEFAULT_FACE_METRICS,
   FACE_SHAPE_LABELS,
   FACE_SHAPE_TIPS,
   FACEMESH_CONNECT_PAIRS,
-  loadFaceMeshScript,
   type FaceMetrics,
   type FaceShapeType,
   type Landmark,
@@ -44,6 +45,8 @@ import { formatSui } from '@/lib/sui/format'
 import { FrameThumb } from '@/components/FrameThumb'
 import { modelUrl } from '@/lib/media'
 import { FrameViewerModal } from './FrameViewerModal'
+import { HandControlLayer } from './HandControlLayer'
+import type { HandAction } from './gestureInterpreter'
 import './tryon.css'
 
 export interface ArTryOnProps {
@@ -169,6 +172,7 @@ export function ArTryOn({ listings, initialListingId, onBuy, onClose }: ArTryOnP
   // Collapsed until the camera or a photo is on, so the launch card's buttons stay reachable.
   const [isDockCollapsed, setIsDockCollapsed] = useState(true)
   const [is3DViewerOpen, setIs3DViewerOpen] = useState(false)
+  const [isHandControlOn, setIsHandControlOn] = useState(true)
 
   const [modelLoadingProgress, setModelLoadingProgress] = useState<number | null>(null)
   const [modelError, setModelError] = useState<string | null>(null)
@@ -223,7 +227,7 @@ export function ArTryOn({ listings, initialListingId, onBuy, onClose }: ArTryOnP
   const threeCanvasRef = useRef<HTMLCanvasElement>(null)
   const faceMeshCanvasRef = useRef<HTMLCanvasElement>(null)
   const overlayRef = useRef<GlassesOverlay | null>(null)
-  const faceMeshRef = useRef<any>(null)
+  const faceMeshRef = useRef<FaceTracker | null>(null)
   const trackingLoopIdRef = useRef(0)
   const cameraRequestIdRef = useRef(0)
   const smoothedPoseRef = useRef<SmoothedPose>({ x: 50, y: 43, widthPx: 310, rollDeg: 0, pitchDeg: 0, yawDeg: 0 })
@@ -486,23 +490,24 @@ export function ArTryOn({ listings, initialListingId, onBuy, onClose }: ArTryOnP
   const processLandmarksRef = useRef(processLandmarks)
   processLandmarksRef.current = processLandmarks
 
-  /** Creates the FaceMesh instance once. Resolves null when MediaPipe can't be loaded. */
+  /** Creates the face tracker once. Resolves null when MediaPipe can't be loaded. */
+  const faceTrackerPromiseRef = useRef<Promise<FaceTracker> | null>(null)
   const ensureFaceMesh = useCallback(async () => {
     if (faceMeshRef.current) return faceMeshRef.current
-    if (!(await loadFaceMeshScript())) return null
-    if (faceMeshRef.current) return faceMeshRef.current
+    faceTrackerPromiseRef.current ??= createFaceTracker((results) => {
+      const face = results.multiFaceLandmarks?.[0]
+      if (face) {
+        processLandmarksRef.current(face)
+      } else {
+        setIsTrackingFace(false)
+        if (live.current.isPhotoMode) faceLandmarksRef.current = null
+      }
+    })
     try {
-      faceMeshRef.current = createFaceMesh((results: any) => {
-        const face = results.multiFaceLandmarks?.[0]
-        if (face) {
-          processLandmarksRef.current(face)
-        } else {
-          setIsTrackingFace(false)
-          if (live.current.isPhotoMode) faceLandmarksRef.current = null
-        }
-      })
+      faceMeshRef.current = await faceTrackerPromiseRef.current
     } catch (err) {
-      console.warn('[Try-on] FaceMesh init failed:', err)
+      console.warn('[Try-on] Face tracking init failed:', err)
+      faceTrackerPromiseRef.current = null
       return null
     }
     return faceMeshRef.current
@@ -615,8 +620,9 @@ export function ArTryOn({ listings, initialListingId, onBuy, onClose }: ArTryOnP
     startCamera('user')
     return () => {
       stopCamera()
-      faceMeshRef.current?.close?.()
+      faceMeshRef.current?.close()
       faceMeshRef.current = null
+      faceTrackerPromiseRef.current = null
     }
   }, [startCamera, stopCamera])
 
@@ -769,6 +775,42 @@ export function ArTryOn({ listings, initialListingId, onBuy, onClose }: ArTryOnP
     }
   }
 
+  /** Runs a hand-gesture command and returns the confirmation shown to the user. */
+  const handleHandAction = (action: HandAction): string => {
+    if (action === 'next' || action === 'prev') {
+      if (frames.length < 2) return 'Only one frame in the store'
+      const i = Math.max(0, frames.findIndex((f) => f.id === selected?.id))
+      const target = frames[(i + (action === 'next' ? 1 : -1) + frames.length) % frames.length]
+      setSelectedId(target.id)
+      return `${action === 'next' ? 'Next' : 'Previous'}: ${target.title}`
+    }
+    if (action === 'buy') {
+      if (!buySelected) return 'This frame is sold out'
+      buySelected()
+      return `Buying ${title}…`
+    }
+    if (action === 'snapshot') {
+      void takeSnapshot()
+      return 'Snapshot taken'
+    }
+    setIsDockCollapsed((collapsed) => !collapsed)
+    return isDockCollapsed ? 'Frame list shown' : 'Frame list hidden'
+  }
+
+  /** Maps a 0..1 point in the camera frame to viewport pixels; the video uses object-fit: cover. */
+  const videoToViewport = useCallback(
+    (x: number, y: number) => {
+      const src = getSourceSize()
+      const vp = getViewportSize()
+      const scale = Math.max(vp.width / src.width, vp.height / src.height)
+      return {
+        left: x * src.width * scale + (vp.width - src.width * scale) / 2,
+        top: y * src.height * scale + (vp.height - src.height * scale) / 2,
+      }
+    },
+    [getSourceSize, getViewportSize],
+  )
+
   const resetAdjustments = () => {
     setManualScale(1)
     setManualOffsetX(0)
@@ -803,6 +845,18 @@ export function ArTryOn({ listings, initialListingId, onBuy, onClose }: ArTryOnP
           </div>
 
           <div className="ar-top-tools-cluster flex items-center gap-2">
+            {isCameraActive && (
+              <button
+                type="button"
+                className={`ar-hud-tool-btn ${isHandControlOn ? 'ring-2 ring-sky-400/70' : ''}`}
+                onClick={() => setIsHandControlOn((on) => !on)}
+                title={isHandControlOn ? 'Turn hand control off' : 'Turn hand control on'}
+                aria-label="Hand control"
+                aria-pressed={isHandControlOn}
+              >
+                <Hand className={`w-4 h-4 ${isHandControlOn ? 'text-sky-300' : 'text-slate-400'}`} />
+              </button>
+            )}
             {isCameraActive && (
               <button type="button" className="ar-hud-tool-btn" onClick={flipCamera} title="Switch front / back camera" aria-label="Switch camera">
                 <SwitchCamera className="w-4 h-4 text-amber-300" />
@@ -1105,6 +1159,13 @@ export function ArTryOn({ listings, initialListingId, onBuy, onClose }: ArTryOnP
               </div>
             </>
           )}
+          <HandControlLayer
+            videoRef={videoRef}
+            active={isHandControlOn && showControls && isCameraActive}
+            mirrored={facingMode === 'user'}
+            toViewport={videoToViewport}
+            onAction={handleHandAction}
+          />
         </main>
 
         {/* 3. Bottom dock: frame catalog, snapshot, buy */}
