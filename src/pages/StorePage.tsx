@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router'
 import { ArTryOn } from '@/components/tryon/ArTryOn'
 import { isContractConfigured } from '@/config'
 import { useListings } from '@/hooks/useMarketplace'
+import { LISTING_STATUS } from '@/types'
 
 /** Full-screen try-on store: every listed frame in one camera room. `?frame=<listingId>` preselects a frame. */
 export function StorePage() {
@@ -27,7 +28,7 @@ export function StorePage() {
       </FullScreenMessage>
     )
   }
-  if (!listings?.some((l) => l.active)) {
+  if (!listings?.some((l) => l.status === LISTING_STATUS.active)) {
     return (
       <FullScreenMessage>
         <p className="text-lg font-semibold">No frames listed yet</p>

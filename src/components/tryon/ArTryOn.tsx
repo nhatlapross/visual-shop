@@ -39,9 +39,8 @@ import {
   type Landmark,
 } from './faceTracking'
 import { startGlassesOverlay, type GlassesOverlay, type SmoothedPose } from './glassesOverlay'
-import type { Listing } from '@/types'
+import { LISTING_STATUS, type Listing } from '@/types'
 import { formatSui } from '@/lib/sui/format'
-import { walrusUrl } from '@/lib/walrus'
 import { FrameViewerModal } from './FrameViewerModal'
 import './tryon.css'
 
@@ -61,7 +60,7 @@ interface FrameItem {
   stockLabel: string
   soldOut: boolean
   image: string
-  /** GLB on Walrus (front along +z, any unit). */
+  /** GLB (front along +z, any unit); empty when the listing's media is not a GLB. */
   modelUrl: string
 }
 
@@ -74,8 +73,8 @@ function toFrameItem(listing: Listing): FrameItem {
     priceLabel: `${formatSui(listing.price)} SUI`,
     stockLabel: soldOut ? 'Sold out' : `${listing.stock} in stock`,
     soldOut,
-    image: walrusUrl(listing.imageBlobId),
-    modelUrl: walrusUrl(listing.modelBlobId),
+    image: listing.imageUrl,
+    modelUrl: listing.imageType === 'glb' ? listing.imageUrl : '',
   }
 }
 
@@ -157,7 +156,7 @@ const FACE_SHAPES: FaceShapeType[] = ['round', 'square', 'oval', 'heart', 'diamo
 
 export function ArTryOn({ listings, initialListingId, onBuy, onClose }: ArTryOnProps) {
   // Catalog
-  const frames = useMemo(() => listings.filter((l) => l.active).map(toFrameItem), [listings])
+  const frames = useMemo(() => listings.filter((l) => l.status === LISTING_STATUS.active).map(toFrameItem), [listings])
   const [selectedId, setSelectedId] = useState<string | undefined>(initialListingId)
   useEffect(() => {
     if (initialListingId) setSelectedId(initialListingId)

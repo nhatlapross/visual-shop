@@ -2,7 +2,7 @@ import { coinWithBalance, Transaction } from '@mysten/sui/transactions'
 import { bcs } from '@mysten/sui/bcs'
 import type { ClientWithCoreApi } from '@mysten/sui/client'
 import { config } from '@/config'
-import type { Listing, NewListingInput, Receipt } from '@/types'
+import type { Listing, ListingStatus, NewListingInput, Receipt } from '@/types'
 
 const target = (fn: string) => `${config.packageId}::marketplace::${fn}` as const
 export const listingType = () => `${config.packageId}::marketplace::Listing`
@@ -20,8 +20,8 @@ export function createListingTx(input: NewListingInput): Transaction {
       tx.pure.string(input.description),
       tx.pure.u64(input.priceMist),
       tx.pure.u64(input.stock),
-      tx.pure.string(input.imageBlobId),
-      tx.pure.string(input.modelBlobId),
+      tx.pure.string(input.imageUrl),
+      tx.pure.string(input.imageType),
     ],
   })
   return tx
@@ -47,12 +47,12 @@ export function updateListingTx(
   listingId: string,
   priceMist: bigint,
   stock: number,
-  active: boolean,
+  status: ListingStatus,
 ): Transaction {
   const tx = new Transaction()
   tx.moveCall({
     target: target('update_listing'),
-    arguments: [tx.object(listingId), tx.pure.u64(priceMist), tx.pure.u64(stock), tx.pure.bool(active)],
+    arguments: [tx.object(listingId), tx.pure.u64(priceMist), tx.pure.u64(stock), tx.pure.u8(status)],
   })
   return tx
 }
@@ -74,9 +74,9 @@ const ListingBcs = bcs.struct('Listing', {
   price: bcs.u64(),
   stock: bcs.u64(),
   sold: bcs.u64(),
-  image_blob_id: bcs.string(),
-  model_blob_id: bcs.string(),
-  active: bcs.bool(),
+  status: bcs.u8(),
+  image_url: bcs.string(),
+  image_type: bcs.string(),
 })
 
 const ReceiptBcs = bcs.struct('Receipt', {
@@ -86,8 +86,8 @@ const ReceiptBcs = bcs.struct('Receipt', {
   buyer: bcs.Address,
   price: bcs.u64(),
   title: bcs.string(),
-  image_blob_id: bcs.string(),
-  model_blob_id: bcs.string(),
+  image_url: bcs.string(),
+  image_type: bcs.string(),
 })
 
 export function decodeListing(content: Uint8Array): Listing {
@@ -100,9 +100,9 @@ export function decodeListing(content: Uint8Array): Listing {
     price: BigInt(f.price),
     stock: Number(f.stock),
     sold: Number(f.sold),
-    imageBlobId: f.image_blob_id,
-    modelBlobId: f.model_blob_id,
-    active: f.active,
+    status: f.status as ListingStatus,
+    imageUrl: f.image_url,
+    imageType: f.image_type,
   }
 }
 
@@ -115,8 +115,8 @@ export function decodeReceipt(content: Uint8Array): Receipt {
     buyer: f.buyer,
     price: BigInt(f.price),
     title: f.title,
-    imageBlobId: f.image_blob_id,
-    modelBlobId: f.model_blob_id,
+    imageUrl: f.image_url,
+    imageType: f.image_type,
   }
 }
 

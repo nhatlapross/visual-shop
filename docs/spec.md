@@ -31,35 +31,35 @@ Everything runs on **Sui testnet**. There is no backend server and no database.
 
 ```
 Browser (static Vite app)
- ├─ /sell        Studio (web worker fit → GLB)  ──PUT──▶ Walrus publisher  (photo, GLB → blob IDs)
- │               create_listing(shop, …, blob IDs) ──▶ Sui
+ ├─ /sell        Studio (web worker fit → GLB)  ──POST─▶ Cloudinary  (file → image_url, image_type)
+ │               create_listing(shop, …, image_url, image_type) ──▶ Sui
  ├─ /            core.getObject(Shop) → listing IDs → core.getObjects ──▶ Sui (gRPC)
- ├─ /listing/:id ModelViewer(GLB) ◀──GET── Walrus aggregator
+ ├─ /listing/:id ModelViewer(GLB) / <img> by image_type ◀──GET── Cloudinary
  │               buy(listing, coin) → Receipt ──▶ Sui
  ├─ /try-on/:id  Camera + MediaPipe + three.js overlay of the GLB
  └─ /purchases   core.listOwnedObjects(type = Receipt) ──▶ Sui
 ```
 
-## 4. Move contract — `move/sources/marketplace.move` (done, 5 tests pass)
+## 4. Move contract — `move/sources/marketplace.move` (done, 8 tests pass)
 
 - `Shop` (shared, created in `init`) holds `listings: vector<ID>` so the frontend loads the catalog with one read and needs no event indexer.
-- `Listing` (shared) has these fields: `seller`, `title`, `description`, `price` (MIST), `stock`, `sold`, `image_blob_id`, `model_blob_id`, `active`.
-- `Receipt` (`key, store`, owned by the buyer) has these fields: `listing_id`, `seller`, `buyer`, `price`, `title`, `image_blob_id`, `model_blob_id`.
-- `create_listing(&mut Shop, title, description, price, stock, image_blob_id, model_blob_id): ID` shares the listing.
-- `buy(&mut Listing, Coin<SUI>): Receipt` checks that the listing is active and in stock and that the payment is exact. It sends the coin to the seller. The PTB builds the payment with `coinWithBalance` and transfers the returned Receipt to the sender (see `buyTx`). Do not use `splitCoins(tx.gas, …)`: the faucet now credits the *address balance*, so funded wallets may own no coin objects at all.
-- `update_listing(&mut Listing, price, stock, active)` can only be called by the seller.
+- `Listing` (shared) has these fields: `seller`, `title`, `description`, `price` (MIST), `stock`, `sold`, `status` (`u8`: 0 = active, 1 = closed), `image_url` (link to the media file: png, jpg, webp, svg, glb, …), `image_type` (format of that file, e.g. `"png"` or `"glb"`; the UI uses it to choose how to render).
+- `Receipt` (`key, store`, owned by the buyer) has these fields: `listing_id`, `seller`, `buyer`, `price`, `title`, `image_url`, `image_type`.
+- `create_listing(&mut Shop, title, description, price, stock, image_url, image_type): ID` shares the listing with `status = 0`.
+- `buy(&mut Listing, Coin<SUI>): Receipt` checks that the listing is active (`status == 0`) and in stock and that the payment is exact. It sends the coin to the seller. The PTB builds the payment with `coinWithBalance` and transfers the returned Receipt to the sender (see `buyTx`). Do not use `splitCoins(tx.gas, …)`: the faucet now credits the *address balance*, so funded wallets may own no coin objects at all.
+- `update_listing(&mut Listing, price, stock, status)` can only be called by the seller; `status` must be 0 or 1.
 - Events: `ListingCreated`, `ListingUpdated`, `Purchased`.
-- Error codes: `ENotSeller = 0`, `EWrongPayment = 1`, `EOutOfStock = 2`, `EInactive = 3`, `EInvalidPrice = 4`.
+- Error codes: `ENotSeller = 0`, `EWrongPayment = 1`, `EOutOfStock = 2`, `EInactive = 3`, `EInvalidPrice = 4`, `EInvalidStatus = 5`.
 
 ## 5. Frontend contracts (shared; change only with a heads-up to the team)
 
 - `src/config.ts` reads public IDs from `src/deployment.json` (committed, written by `pnpm publish:move`). Optional `VITE_*` overrides go in `.env.local`. All `.env*` files are git-ignored. This is a static site, so **never put a private key in any `VITE_*` variable**.
-- `src/types.ts` defines `Listing`, `Receipt` and `NewListingInput`.
+- `src/types.ts` defines `Listing`, `Receipt`, `NewListingInput` and `LISTING_STATUS`.
 - `src/dapp-kit.ts` creates the dApp Kit instance (gRPC client per network).
 - `src/lib/sui/marketplace.ts` provides `createListingTx`, `buyTx`, `updateListingTx`, `fetchListings`, `fetchListing` and `fetchReceipts`. Its `ShopBcs`, `ListingBcs` and `ReceiptBcs` must match the Move structs field for field, so update both together.
 - `src/lib/walrus.ts` provides `uploadToWalrus(blob) → blobId` and `walrusUrl(blobId)`.
 - `src/hooks/useMarketplace.ts` provides `useListings`, `useListing(id)` and `useMyReceipts`.
-- GLB format: the studio exports binary glTF in **meters** with embedded textures and `userData.eyewear` (version 2, anchors `bridgeCenter`, `leftHinge`, `rightHinge`). The viewer and try-on load it from `walrusUrl(listing.modelBlobId)`.
+- GLB format: the studio exports binary glTF in **meters** with embedded textures and `userData.eyewear` (version 2, anchors `bridgeCenter`, `leftHinge`, `rightHinge`). The viewer and try-on load it from `listing.imageUrl` when `listing.imageType === "glb"`.
 
 ## 6. Ported code
 

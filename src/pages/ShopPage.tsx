@@ -2,7 +2,7 @@ import { ArrowRight, Box, Camera, Wallet } from 'lucide-react'
 import { Link } from 'react-router'
 import { useListings } from '@/hooks/useMarketplace'
 import { formatSui } from '@/lib/sui/format'
-import { walrusUrl } from '@/lib/walrus'
+import { LISTING_STATUS } from '@/types'
 
 const steps = [
   { icon: Box, title: 'Built from real photos', text: 'Sellers upload a photo of the frame and get a 3D model, stored on Walrus.' },
@@ -13,7 +13,7 @@ const steps = [
 // Landing page. The store itself is the full-screen fitting room at /store.
 export function ShopPage() {
   const { data: listings } = useListings()
-  const available = listings?.filter((l) => l.active && l.stock > 0) ?? []
+  const available = listings?.filter((l) => l.status === LISTING_STATUS.active && l.stock > 0) ?? []
 
   return (
     <div className="space-y-16">
@@ -60,7 +60,7 @@ export function ShopPage() {
                   className="group block overflow-hidden rounded-xl border border-neutral-200 bg-white"
                 >
                   <div className="relative">
-                    <img src={walrusUrl(l.imageBlobId)} alt={l.title} className="aspect-square w-full object-cover" />
+                    <img src={l.imageUrl} alt={l.title} className="aspect-square w-full object-cover" />
                     <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-0.5 text-xs font-medium">
                       Try on
                     </span>
