@@ -39,3 +39,6 @@ secrets/
 # Move build output
 move/build
 publish.err
+
+# Claude Code local state and agent worktrees
+.claude/
