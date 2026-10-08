@@ -1,5 +1,4 @@
-'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { validateContour } from '@/lib/eyewear-3d/reconstruction/observations';
 import type {
@@ -12,16 +11,16 @@ import type {
 } from '@/lib/eyewear-3d/reconstruction/types';
 
 const parts: Partial<Record<PartId, string>> = {
-  LeftLens: 'Tròng trái ảnh',
-  RightLens: 'Tròng phải ảnh',
-  LeftRim: 'Biên ngoài gọng trái ảnh',
-  RightRim: 'Biên ngoài gọng phải ảnh',
-  NoseBridge: 'Cầu kính',
-  LeftTemple: 'Càng trái ảnh',
-  RightTemple: 'Càng phải ảnh',
-  LeftTip: 'Đuôi càng trái',
-  RightTip: 'Đuôi càng phải',
-  LensMarkings: 'Chữ / tem trên tròng',
+  LeftLens: 'Left lens (image left)',
+  RightLens: 'Right lens (image right)',
+  LeftRim: 'Left rim, outer edge (image left)',
+  RightRim: 'Right rim, outer edge (image right)',
+  NoseBridge: 'Bridge',
+  LeftTemple: 'Left temple (image left)',
+  RightTemple: 'Right temple (image right)',
+  LeftTip: 'Left temple tip',
+  RightTip: 'Right temple tip',
+  LensMarkings: 'Lens text / stickers',
 };
 export function useReferenceUrl(reference?: ReferenceImage) {
   const [url, setUrl] = useState('');
@@ -97,7 +96,7 @@ export default function EyewearReferenceEditor({
       : part?.[pointsKey]) ??
     [];
   const feature = part?.surfaceLandmarks?.[featureIndex];
-  const location = (event: React.PointerEvent): Vec2 => {
+  const location = (event: PointerEvent): Vec2 => {
     const rect = svg.current!.getBoundingClientRect();
     return [
       Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)),
@@ -160,10 +159,12 @@ export default function EyewearReferenceEditor({
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <label htmlFor="eyewear-part">Bộ phận</label>
+        <label htmlFor="eyewear-part" className="text-sm">
+          Part
+        </label>
         <select
           id="eyewear-part"
-          className="rounded-md border bg-background p-2 text-sm"
+          className="rounded-md border border-neutral-300 bg-white p-2 text-sm"
           value={selected}
           onChange={(e) => {
             setSelected(e.target.value as PartId);
@@ -187,9 +188,9 @@ export default function EyewearReferenceEditor({
           ))}
         </select>
         <select
-          aria-label="Chế độ chỉnh"
+          aria-label="Edit mode"
           value={mode}
-          className="rounded-md border bg-background p-2 text-sm"
+          className="rounded-md border border-neutral-300 bg-white p-2 text-sm"
           onChange={(e) => {
             setMode(e.target.value as typeof mode);
             setDrag(null);
@@ -197,19 +198,19 @@ export default function EyewearReferenceEditor({
             featureAnchor.current = null;
           }}
         >
-          <option value="contour">Biên trong / vùng</option>
-          <option value="outer">Biên ngoài</option>
-          <option value="landmarks">Đường đi / điểm neo</option>
-          <option value="surface">Chi tiết bề mặt</option>
+          <option value="contour">Inner outline / region</option>
+          <option value="outer">Outer outline</option>
+          <option value="landmarks">Path / anchor points</option>
+          <option value="surface">Surface details</option>
         </select>
         <Button variant="outline" size="sm" onClick={onUndo}>
-          Hoàn tác
+          Undo
         </Button>
       </div>
       {isSurface && (
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <select
-            aria-label="Chi tiết bề mặt"
+            aria-label="Surface detail"
             value={featureIndex}
             disabled={!points.length}
             onChange={(e) => {
@@ -218,19 +219,19 @@ export default function EyewearReferenceEditor({
               featureAnchor.current =
                 part?.surfaceLandmarks?.[index]?.position ?? null;
             }}
-            className="rounded border bg-background p-2"
+            className="rounded-md border border-neutral-300 bg-white p-2"
           >
             {points.map((_, i) => (
               <option key={i} value={i}>
-                Chi tiết {i + 1}
+                Detail {i + 1}
               </option>
             ))}
           </select>
           <select
-            aria-label="Mặt của chi tiết"
+            aria-label="Detail face"
             value={feature?.role ?? 'unknown'}
             disabled={!feature}
-            className="rounded border bg-background p-2"
+            className="rounded-md border border-neutral-300 bg-white p-2"
             onChange={(e) =>
               part &&
               onChange({
@@ -247,18 +248,18 @@ export default function EyewearReferenceEditor({
               })
             }
           >
-            <option value="unknown">Chưa xác định mặt</option>
-            <option value="front-cap">Mặt trước</option>
-            <option value="back-cap">Mặt sau</option>
-            <option value="outer-wall">Thành ngoài</option>
-            <option value="aperture-wall">Thành tròng</option>
-            <option value="bevel">Vát cạnh</option>
+            <option value="unknown">Face unknown</option>
+            <option value="front-cap">Front face</option>
+            <option value="back-cap">Back face</option>
+            <option value="outer-wall">Outer wall</option>
+            <option value="aperture-wall">Lens-opening wall</option>
+            <option value="bevel">Bevel</option>
           </select>
           <select
-            aria-label="Độ tin cậy chi tiết"
+            aria-label="Detail confidence"
             value={feature?.quality ?? 'needs-review'}
             disabled={!feature}
-            className="rounded border bg-background p-2"
+            className="rounded-md border border-neutral-300 bg-white p-2"
             onChange={(e) =>
               part &&
               onChange({
@@ -275,19 +276,18 @@ export default function EyewearReferenceEditor({
               })
             }
           >
-            <option value="needs-review">Cần kiểm tra</option>
-            <option value="usable">Đã xác nhận</option>
+            <option value="needs-review">Needs review</option>
+            <option value="usable">Confirmed</option>
           </select>
         </div>
       )}
       <div
-        className="relative overflow-hidden rounded-lg border bg-neutral-100"
+        className="relative overflow-hidden rounded-lg border border-neutral-200 bg-neutral-100"
         style={{ aspectRatio: `${reference.width}/${reference.height}` }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={url || undefined}
-          alt="Ảnh sản phẩm gốc để đối chiếu"
+          alt="Original product photo for comparison"
           className="absolute inset-0 h-full w-full"
         />
         <svg
@@ -396,9 +396,9 @@ export default function EyewearReferenceEditor({
           )}
         </svg>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Kéo điểm để sửa đường biên. Phần chưa nhận diện: thêm điểm theo đường đi
-        của bộ phận. Đây không phải số đo kích thước thật.
+      <p className="text-xs text-neutral-500">
+        Drag the points to fix the outline. For a part that was not detected,
+        add points along its path. These points are not real-size measurements.
       </p>
       <div className="flex flex-wrap gap-2">
         <Button
@@ -409,7 +409,7 @@ export default function EyewearReferenceEditor({
             if (isSurface) setFeatureIndex(points.length);
           }}
         >
-          Thêm điểm
+          Add point
         </Button>
         <Button
           size="sm"
@@ -420,7 +420,7 @@ export default function EyewearReferenceEditor({
           }}
           disabled={!points.length}
         >
-          Bỏ điểm cuối
+          Remove last point
         </Button>
         <Button
           size="sm"
@@ -454,7 +454,7 @@ export default function EyewearReferenceEditor({
             )
           }
         >
-          Xác nhận vùng này
+          Confirm this region
         </Button>
       </div>
     </section>

@@ -1,6 +1,6 @@
-'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { exportEyewearToGLB, downloadGLBBlob } from '@/lib/eyewear-3d/exporter';
 import { resolvePartMaterialDescriptor } from '@/lib/eyewear-3d/reconstruction/materials';
@@ -21,24 +21,52 @@ import EyewearComparisonView, {
 import { useEyewearReconstruction } from './use-eyewear-reconstruction';
 
 const PART_LABELS: Record<PartId, string> = {
-  LeftRim: 'Biên trong gọng trái',
-  RightRim: 'Biên trong gọng phải',
-  NoseBridge: 'Cầu kính',
-  LeftHinge: 'Bản lề trái',
-  RightHinge: 'Bản lề phải',
-  LeftTemple: 'Càng trái',
-  RightTemple: 'Càng phải',
-  LeftTip: 'Đuôi càng trái',
-  RightTip: 'Đuôi càng phải',
-  NosePads: 'Đệm mũi',
-  LeftLens: 'Tròng trái',
-  RightLens: 'Tròng phải',
-  LensMarkings: 'Chữ / tem trên tròng',
+  LeftRim: 'Left rim',
+  RightRim: 'Right rim',
+  NoseBridge: 'Bridge',
+  LeftHinge: 'Left hinge',
+  RightHinge: 'Right hinge',
+  LeftTemple: 'Left temple',
+  RightTemple: 'Right temple',
+  LeftTip: 'Left temple tip',
+  RightTip: 'Right temple tip',
+  NosePads: 'Nose pads',
+  LeftLens: 'Left lens',
+  RightLens: 'Right lens',
+  LensMarkings: 'Lens text / stickers',
+};
+
+const STATUS_LABELS = {
+  idle: 'Waiting for photos',
+  loading: 'Reading photos',
+  analyzing: 'Finding the frame outline',
+  fitting: 'Fitting camera and geometry',
+  draft: 'Draft ready — please review',
+  dirty: 'Inputs changed — rebuild needed',
+  cancelled: 'Cancelled',
+  error: 'Error',
+} as const;
+
+/** Plain-English messages for the error codes thrown by the reconstruction library. */
+const ERROR_MESSAGES: Record<string, string> = {
+  REFERENCE_COUNT: 'Choose between 1 and 6 photos',
+  BATCH_BYTE_LIMIT: 'the photos are too large together (48 MB max)',
+  IMAGE_BYTE_LIMIT: 'each photo must be under 12 MB',
+  IMAGE_PIXEL_LIMIT: 'a photo has too many pixels (40 MP max)',
+  UNSUPPORTED_IMAGE: 'use PNG, JPEG or WebP photos',
+  INVALID_IMAGE_HEADER: 'a photo file looks damaged',
+  ANIMATED_IMAGE_UNSUPPORTED: 'animated images are not supported',
+  INVALID_IMAGE: 'a photo could not be read',
+  WORKER_UNAVAILABLE: 'the 3D engine could not start in this browser',
+  IMAGE_CONTEXT_UNAVAILABLE: 'the browser could not decode the photo',
+  RECONSTRUCTION_FAILED: 'the 3D reconstruction failed',
 };
 
 export interface EyewearDraft {
   blob: Blob;
   candidate: ReconstructionCandidate;
+  /** Original bytes of the main (primary) reference photo the draft was fitted to. */
+  photo: Blob;
 }
 interface EyewearLabProps {
   initialImageUrl?: string | null;
@@ -77,6 +105,9 @@ export default function EyewearLab({
   const mounted = useRef(true);
   const pendingApply = useRef<AbortController | null>(null);
   const pendingInitial = useRef<AbortController | null>(null);
+  // Fit automatically once the outline analysis of a fresh photo set finishes,
+  // so a seller only has to pick photos. Later edits still need "Rebuild".
+  const autoFit = useRef(false);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -85,6 +116,13 @@ export default function EyewearLab({
       pendingInitial.current?.abort();
     };
   }, []);
+  const { status, reconstruct } = state;
+  useEffect(() => {
+    if (status === 'error' || status === 'cancelled') autoFit.current = false;
+    if (status !== 'dirty' || !autoFit.current) return;
+    autoFit.current = false;
+    reconstruct();
+  }, [status, reconstruct]);
   useEffect(() => {
     pendingApply.current?.abort();
   }, [state.revision, reference?.id, mode, importedFile]);
@@ -119,9 +157,11 @@ export default function EyewearLab({
     }
   };
   const applyDraft = async () => {
+    const photo = state.references[0]?.blob;
     if (
       !onApplyDraft ||
       !candidate ||
+      !photo ||
       !preview.current ||
       !previewCurrent ||
       importedFile ||
@@ -144,11 +184,11 @@ export default function EyewearLab({
         currentRevision.current !== revision
       )
         return;
-      await onApplyDraft({ blob, candidate }, controller.signal);
+      await onApplyDraft({ blob, candidate, photo }, controller.signal);
     } catch (err) {
       if (mounted.current && !controller.signal.aborted)
         setExportError(
-          err instanceof Error ? err.message : 'Không thể lưu mô hình.'
+          err instanceof Error ? err.message : 'Could not save the model.'
         );
     } finally {
       if (pendingApply.current === controller) {
@@ -167,20 +207,23 @@ export default function EyewearLab({
     try {
       const url = new URL(initialImageUrl, window.location.href);
       if (!['https:', 'http:', 'blob:'].includes(url.protocol))
-        throw new Error('Đường dẫn ảnh không hỗ trợ.');
+        throw new Error('This image URL is not supported.');
       const response = await fetch(url, { signal: controller.signal });
       if (!response.ok)
-        throw new Error('Không đọc được ảnh hiện tại. Hãy chọn ảnh từ máy.');
+        throw new Error(
+          'Could not load the current photo. Choose one from your device.'
+        );
       const blob = await response.blob();
       if (!mounted.current || controller.signal.aborted) return;
       setImportedFile(null);
+      autoFit.current = true;
       await state.setReferences([
         new File([blob], 'product-reference', { type: blob.type }),
       ]);
     } catch (err) {
       if (mounted.current && !controller.signal.aborted)
         setExportError(
-          err instanceof Error ? err.message : 'Không đọc được ảnh.'
+          err instanceof Error ? err.message : 'Could not read the photo.'
         );
     } finally {
       if (mounted.current && pendingInitial.current === controller)
@@ -203,7 +246,7 @@ export default function EyewearLab({
       glbBytes = (await exportEyewearToGLB(activePreview.model)).size;
     } catch (err) {
       setExportError(
-        err instanceof Error ? err.message : 'Không thể tạo báo cáo GLB.'
+        err instanceof Error ? err.message : 'Could not create the GLB report.'
       );
       return;
     }
@@ -250,7 +293,7 @@ export default function EyewearLab({
                 visualApproval: 'unverified',
                 customerReady: false,
                 reason:
-                  'Thiếu bộ ảnh thật nhiều góc cùng SKU, duyệt sản phẩm và đo thiết bị AR.',
+                  'Missing a real multi-angle photo set of the same SKU, a product review and an AR device measurement.',
               },
               dimensions: new THREE.Box3()
                 .setFromObject(model)
@@ -281,35 +324,39 @@ export default function EyewearLab({
       'eyewear-report.json'
     );
   };
+  const field =
+    'rounded-md border border-neutral-300 bg-white p-2 text-sm disabled:opacity-50';
   return (
-    <fieldset
-      disabled={applying}
-      className="mx-auto min-w-0 max-w-7xl space-y-5 p-4 md:p-6"
-    >
+    <fieldset disabled={applying} className="min-w-0 space-y-5">
       <header className="space-y-1">
-        <h1 className="text-xl font-semibold">Dựng kính theo ảnh gốc</h1>
-        <p className="text-sm text-muted-foreground">
-          Có thể dựng từ một ảnh. Hệ thống giữ dáng, màu và họa tiết nhìn thấy,
-          rồi suy luận phần khuất theo cấu trúc gọng kính. Nếu có nhiều ảnh,
-          chọn ảnh chính diện làm ảnh chính và thêm ảnh hai bên của cùng mẫu,
-          cùng màu để đối chiếu. Kiểm tra bản nháp trước khi dùng cho khách.
+        <h2 className="text-lg font-semibold">
+          Build a 3D model from your photos
+        </h2>
+        <p className="text-sm text-neutral-500">
+          One photo is enough. We keep the visible shape, color and pattern,
+          and infer the hidden parts from how frames are built. With several
+          photos, make the straight-on front view the main photo and add side
+          views of the same model and color. Review the draft before you list
+          it.
         </p>
       </header>
-      <section className="flex flex-wrap items-end gap-3 rounded-xl border p-4">
+      <section className="flex flex-wrap items-end gap-3 rounded-xl border border-neutral-200 bg-neutral-50 p-4">
         <label className="min-w-52 flex-1 space-y-2 text-sm">
           <span className="block font-medium">
-            Ảnh sản phẩm (PNG, JPEG, WebP)
+            Product photos (PNG, JPEG, WebP · up to 6)
           </span>
           <input
             type="file"
             multiple
             accept="image/png,image/jpeg,image/webp"
             data-testid="reference-input"
-            className="block w-full text-sm"
+            className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-neutral-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-neutral-800"
             disabled={loadingInitial}
             onChange={(event) => {
+              const files = Array.from(event.target.files ?? []);
               setImportedFile(null);
-              void state.setReferences(Array.from(event.target.files ?? []));
+              autoFit.current = files.length > 0;
+              void state.setReferences(files);
             }}
           />
         </label>
@@ -319,17 +366,17 @@ export default function EyewearLab({
             disabled={busy || loadingInitial}
             onClick={() => void loadInitial()}
           >
-            {loadingInitial ? 'Đang đọc ảnh…' : 'Dùng ảnh sản phẩm hiện tại'}
+            {loadingInitial ? 'Loading photo…' : 'Use the current product photo'}
           </Button>
         )}
         <label className="space-y-1 text-sm">
-          <span className="block">Bề ngang thật (mm), nếu biết</span>
+          <span className="block">Real frame width (mm), if known</span>
           <input
             type="number"
             min={60}
             max={250}
-            placeholder="Chưa biết — dùng ước lượng"
-            className="w-52 rounded-md border bg-background p-2"
+            placeholder="Unknown — estimate it"
+            className={`w-52 ${field}`}
             value={state.measurements.frameWidth?.mm ?? ''}
             onChange={(e) =>
               state.setMeasurement(
@@ -347,63 +394,54 @@ export default function EyewearLab({
             state.reconstruct();
           }}
         >
-          {busy ? 'Đang xử lý…' : 'Dựng bản nháp 3D'}
+          {busy ? 'Working…' : candidate ? 'Rebuild 3D draft' : 'Build 3D draft'}
         </Button>
         {busy && (
           <Button variant="outline" onClick={state.cancel}>
-            Hủy
+            Cancel
           </Button>
         )}
       </section>
       {exportError && (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="text-sm text-red-600">
           {exportError}
         </p>
       )}
       {state.error && (
         <p
           role="alert"
-          className="rounded-lg border border-destructive p-3 text-sm text-destructive"
+          className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700"
         >
-          Không xử lý được: {state.error}. Ảnh gốc không bị sửa.
+          Could not process the photos:{' '}
+          {ERROR_MESSAGES[state.error] ?? state.error}. Your original photos
+          were not changed.
         </p>
       )}
       <div
         data-testid="quality-state"
         data-revision-state={state.status === 'draft' ? 'draft' : state.status}
-        className="flex flex-wrap gap-2 text-sm"
+        className="flex flex-wrap items-center gap-2 text-sm"
       >
+        {busy && <Loader2 className="size-4 animate-spin text-neutral-500" />}
         <span>
-          Trạng thái:{' '}
-          {
-            (
-              {
-                idle: 'Chờ ảnh',
-                loading: 'Đang đọc ảnh',
-                analyzing: 'Đang tìm đường biên',
-                fitting: 'Đang khớp camera / hình học',
-                draft: 'Bản nháp — cần kiểm tra',
-                dirty: 'Đã đổi đầu vào — cần dựng lại',
-                cancelled: 'Đã hủy',
-                error: 'Có lỗi',
-              } as const
-            )[state.status]
-          }
+          <span className="text-neutral-500">Status:</span>{' '}
+          <span className="font-medium">{STATUS_LABELS[state.status]}</span>
         </span>
         {candidate && (
-          <span className="text-muted-foreground">
-            · {candidate.measurements.frameWidth.mm.toFixed(1)} mm (
+          <span className="text-neutral-500">
+            · {candidate.measurements.frameWidth.mm.toFixed(1)} mm wide (
             {candidate.measurements.frameWidth.source === 'user-confirmed'
-              ? 'bạn cung cấp'
-              : 'ước lượng'}
+              ? 'provided by you'
+              : 'estimated'}
             )
           </span>
         )}
       </div>
       {state.references.length === 1 && (
-        <p className="text-sm text-muted-foreground">
-          Dựng từ 1 ảnh: phần khuất, độ dày và chiều dài càng kính là ước lượng.
-          Bạn có thể chỉnh đường biên hoặc bổ sung số đo để khớp sản phẩm hơn.
+        <p className="text-sm text-neutral-500">
+          Built from 1 photo: hidden parts, thickness and temple length are
+          estimates. You can adjust the outline or add a measurement for a
+          closer match.
         </p>
       )}
       {state.references.length > 0 && (
@@ -415,8 +453,8 @@ export default function EyewearLab({
                 variant={r.id === reference?.id ? 'default' : 'outline'}
                 onClick={() => setReferenceId(r.id)}
               >
-                Ảnh {i + 1}
-                {i === 0 ? ' · Chính' : ''}
+                Photo {i + 1}
+                {i === 0 ? ' · Main' : ''}
               </Button>
               {i > 0 && (
                 <Button
@@ -424,7 +462,7 @@ export default function EyewearLab({
                   variant="ghost"
                   onClick={() => state.setPrimary(r.id)}
                 >
-                  Đặt chính
+                  Make main
                 </Button>
               )}
             </div>
@@ -434,7 +472,7 @@ export default function EyewearLab({
       <div className="grid items-start gap-5 lg:grid-cols-2">
         {reference && (
           <div className="space-y-3">
-            <h2 className="font-medium">Ảnh gốc & đường biên</h2>
+            <h3 className="font-medium">Photo &amp; outline</h3>
             <EyewearReferenceEditor
               reference={reference}
               observations={state.observations}
@@ -446,21 +484,21 @@ export default function EyewearLab({
         <div className="space-y-3">
           {candidate && reference ? (
             <>
-              <h2 className="font-medium">Mô hình 3D</h2>
+              <h3 className="font-medium">3D model</h3>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-sm">Góc xem</span>
+                <span className="text-sm">View</span>
                 <select
-                  aria-label="Góc xem mô hình"
-                  className="rounded-md border bg-background p-2 text-sm"
+                  aria-label="Model view angle"
+                  className={field}
                   value={mode}
                   onChange={(e) => setMode(e.target.value as typeof mode)}
                 >
-                  <option value="match">Cùng góc ảnh gốc</option>
-                  <option value="overlay">Chồng lên ảnh gốc</option>
-                  <option value="orbit">Xoay tự do</option>
-                  <option value="front">Chính diện</option>
-                  <option value="left">Nghiêng trái</option>
-                  <option value="right">Nghiêng phải</option>
+                  <option value="match">Same angle as the photo</option>
+                  <option value="overlay">Overlay on the photo</option>
+                  <option value="orbit">Free orbit</option>
+                  <option value="front">Front</option>
+                  <option value="left">Left side</option>
+                  <option value="right">Right side</option>
                 </select>
               </div>
               <EyewearComparisonView
@@ -479,61 +517,70 @@ export default function EyewearLab({
                     disabled={!previewCurrent || !!importedFile || applying}
                     onClick={() => void applyDraft()}
                   >
-                    {applying
-                      ? 'Đang lưu mô hình…'
-                      : 'Dùng mô hình đã kiểm tra cho sản phẩm'}
+                    {applying ? 'Saving model…' : 'Use this model'}
                   </Button>
                 )}
                 <Button
                   data-testid="export-glb"
+                  variant={onApplyDraft ? 'outline' : 'default'}
                   disabled={!previewCurrent}
                   onClick={() => void exportModel()}
                 >
-                  Tải GLB nháp
+                  Download draft GLB
                 </Button>
                 <Button
                   variant="outline"
                   disabled={!previewCurrent}
                   onClick={capture}
                 >
-                  Lưu ảnh render
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={!previewCurrent}
-                  onClick={() => void report()}
-                >
-                  Báo cáo JSON
+                  Save render
                 </Button>
               </div>
-              <label className="block text-sm">
-                Nhập GLB để kiểm tra round-trip
-                <input
-                  data-testid="import-glb"
-                  type="file"
-                  accept=".glb"
-                  className="mt-2 block text-sm"
-                  onChange={(e) => setImportedFile(e.target.files?.[0] ?? null)}
-                />
-              </label>
+              <details className="text-sm">
+                <summary className="cursor-pointer text-neutral-500">
+                  Advanced tools
+                </summary>
+                <div className="space-y-3 pt-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!previewCurrent}
+                    onClick={() => void report()}
+                  >
+                    JSON report
+                  </Button>
+                  <label className="block">
+                    Import a GLB to check the round-trip
+                    <input
+                      data-testid="import-glb"
+                      type="file"
+                      accept=".glb"
+                      className="mt-2 block text-sm"
+                      onChange={(e) =>
+                        setImportedFile(e.target.files?.[0] ?? null)
+                      }
+                    />
+                  </label>
+                </div>
+              </details>
             </>
           ) : (
-            <div className="flex min-h-64 items-center justify-center rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-              Tải một ảnh rồi dựng bản nháp để đối chiếu ở cùng góc chụp.
+            <div className="flex min-h-64 items-center justify-center rounded-xl border border-dashed border-neutral-300 p-8 text-center text-sm text-neutral-500">
+              {busy
+                ? 'Building your 3D draft…'
+                : 'Upload a photo and we will build a 3D draft you can compare at the same camera angle.'}
             </div>
           )}
         </div>
       </div>
       {candidate && selectedMaterial && (
         <div className="grid gap-4 md:grid-cols-2">
-          <section className="space-y-3 rounded-xl border p-4">
-            <h2 className="font-medium">
-              Vật liệu từng bộ phận — cần xác nhận
-            </h2>
+          <section className="space-y-3 rounded-xl border border-neutral-200 p-4">
+            <h3 className="font-medium">Materials per part — please confirm</h3>
             <div className="flex flex-wrap items-center gap-2">
               <select
-                aria-label="Bộ phận vật liệu"
-                className="rounded border bg-background p-2"
+                aria-label="Material part"
+                className={field}
                 value={part}
                 onChange={(e) => setPart(e.target.value as PartId)}
               >
@@ -554,7 +601,7 @@ export default function EyewearLab({
                 ))}
               </select>
               <input
-                aria-label="Màu bộ phận"
+                aria-label="Part color"
                 type="color"
                 disabled={
                   (selectedMaterial.colorMode ?? 'observed') !== 'override'
@@ -570,8 +617,8 @@ export default function EyewearLab({
                 }
               />
               <select
-                aria-label="Nguồn màu"
-                className="rounded border bg-background p-2"
+                aria-label="Color source"
+                className={field}
                 value={selectedMaterial.colorMode ?? 'observed'}
                 onChange={(e) =>
                   state.updateMaterial(part, {
@@ -581,12 +628,12 @@ export default function EyewearLab({
                   })
                 }
               >
-                <option value="observed">Màu từ ảnh gốc</option>
-                <option value="override">Màu tự chọn</option>
+                <option value="observed">Color from photo</option>
+                <option value="override">Custom color</option>
               </select>
               <select
-                aria-label="Loại bề mặt"
-                className="rounded border bg-background p-2"
+                aria-label="Surface type"
+                className={field}
                 value={selectedMaterial.metalness > 0.5 ? 'metal' : 'plastic'}
                 onChange={(e) =>
                   state.updateMaterial(part, {
@@ -598,15 +645,15 @@ export default function EyewearLab({
                   })
                 }
               >
-                <option value="plastic">Nhựa / chưa xác định</option>
-                <option value="metal">Kim loại</option>
+                <option value="plastic">Plastic / unknown</option>
+                <option value="metal">Metal</option>
               </select>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {(
                 [
-                  ['roughness', 'Độ nhám bề mặt', 0.3],
-                  ['clearcoat', 'Lớp phủ bóng', 0],
+                  ['roughness', 'Surface roughness', 0.3],
+                  ['clearcoat', 'Clear coat', 0],
                 ] as const
               ).map(([key, label, fallback]) => (
                 <label key={key} className="space-y-1 text-sm">
@@ -617,7 +664,7 @@ export default function EyewearLab({
                     min={0}
                     max={1}
                     step={0.01}
-                    className="w-full rounded border bg-background p-2"
+                    className={`w-full ${field}`}
                     value={selectedMaterial[key] ?? fallback}
                     onChange={(event) => {
                       const value = event.target.valueAsNumber;
@@ -633,19 +680,19 @@ export default function EyewearLab({
                 </label>
               ))}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Màu là ước lượng dưới ánh sáng ảnh chụp; không phải phép đo màu
-              hay xác định hợp kim.
+            <p className="text-xs text-neutral-500">
+              Colors are estimated under the photo&apos;s lighting. This is not
+              a color measurement or an alloy identification.
             </p>
           </section>
-          <section className="space-y-3 rounded-xl border p-4">
-            <h2 className="font-medium">
-              Tròng — không lấy nền ảnh làm texture
-            </h2>
+          <section className="space-y-3 rounded-xl border border-neutral-200 p-4">
+            <h3 className="font-medium">
+              Lenses — the photo background is not used as texture
+            </h3>
             <div className="flex flex-wrap gap-2">
               <select
-                aria-label="Loại tròng"
-                className="rounded border bg-background p-2"
+                aria-label="Lens type"
+                className={field}
                 value={candidate.lens.mode}
                 onChange={(e) =>
                   state.updateLens({
@@ -655,13 +702,13 @@ export default function EyewearLab({
                   })
                 }
               >
-                <option value="clear">Trong suốt</option>
-                <option value="tinted">Nhuộm màu</option>
+                <option value="clear">Clear</option>
+                <option value="tinted">Tinted</option>
                 <option value="gradient">Gradient</option>
-                <option value="mirror">Tráng gương</option>
+                <option value="mirror">Mirrored</option>
               </select>
               <input
-                aria-label="Màu trên tròng"
+                aria-label="Lens top color"
                 type="color"
                 value={candidate.lens.colorTop}
                 onChange={(e) =>
@@ -674,7 +721,7 @@ export default function EyewearLab({
               />
               {candidate.lens.mode === 'gradient' && (
                 <input
-                  aria-label="Màu dưới tròng"
+                  aria-label="Lens bottom color"
                   type="color"
                   value={candidate.lens.colorBottom}
                   onChange={(e) =>
@@ -687,19 +734,20 @@ export default function EyewearLab({
                 />
               )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Chưa mô phỏng đơn kính. Chữ / tem chưa tách sạch được giữ trong
-              ảnh gốc và không tự dựng lại trên tròng.
+            <p className="text-xs text-neutral-500">
+              Prescription lenses are not simulated. Text or stickers that
+              could not be separated cleanly stay in the photo and are not
+              rebuilt on the lens.
             </p>
           </section>
-          <section className="space-y-2 rounded-xl border p-4 md:col-span-2">
-            <h2 className="font-medium">Đối chiếu ảnh thật</h2>
+          <section className="space-y-2 rounded-xl border border-neutral-200 p-4 md:col-span-2">
+            <h3 className="font-medium">Comparison with the photo</h3>
             {candidate.reports.map((r, i) => (
               <div key={r.referenceId} className="space-y-2 text-sm">
                 <p>
-                  Ảnh {i + 1} — sai lệch biên 2D đã nhận diện:{' '}
+                  Photo {i + 1} — detected 2D outline error:{' '}
                   {r.contourError === null
-                    ? 'chưa đủ dữ liệu'
+                    ? 'not enough data'
                     : r.contourError.toFixed(4)}
                 </p>
                 <dl
@@ -711,19 +759,17 @@ export default function EyewearLab({
                       <dt>{PART_LABELS[name as PartId]}</dt>
                       <dd
                         className={
-                          error.missing
-                            ? 'text-destructive'
-                            : 'text-muted-foreground'
+                          error.missing ? 'text-red-600' : 'text-neutral-500'
                         }
                       >
                         {error.missing
-                          ? 'Chưa đối chiếu đủ'
+                          ? 'Not fully compared'
                           : [
                               error.contour !== null
-                                ? `biên ${error.contour.toFixed(4)}`
+                                ? `outline ${error.contour.toFixed(4)}`
                                 : null,
                               error.landmarks !== null
-                                ? `điểm ${error.landmarks.toFixed(4)}`
+                                ? `points ${error.landmarks.toFixed(4)}`
                                 : null,
                             ]
                               .filter(Boolean)
@@ -732,17 +778,17 @@ export default function EyewearLab({
                     </div>
                   ))}
                 </dl>
-                <details className="text-xs text-muted-foreground">
-                  <summary>Giới hạn / cảnh báo</summary>
+                <details className="text-xs text-neutral-500">
+                  <summary className="cursor-pointer">Limits / warnings</summary>
                   <p className="pt-1">{r.issues.join(', ')}</p>
                 </details>
               </div>
             ))}
-            <p className="text-xs text-muted-foreground">
-              Sai lệch tọa độ ảnh chuẩn hóa, không phải tỷ lệ chính xác của
-              kính. Biên tròng khớp không chứng minh gọng, càng, màu hay phần
-              khuất đúng. Chiều sâu và kích thước chưa cung cấp vẫn là ước
-              lượng. Chưa xuất bản cho khách và chưa xác nhận độ vừa.
+            <p className="text-xs text-neutral-500">
+              Errors are in normalized image coordinates, not the real scale of
+              the frame. A matching lens outline does not prove that the frame,
+              temples, color or hidden parts are right. Depth and any size you
+              did not enter are still estimates.
             </p>
           </section>
         </div>
