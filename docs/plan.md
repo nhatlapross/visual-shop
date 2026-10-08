@@ -21,6 +21,8 @@ The two parts only meet **on-chain**: Part 1 writes `Listing` objects and Part 2
 
 ## How we work
 
+- **Until the two ports land on `main`, do not edit** `src/pages/SellPage.tsx`, `src/components/studio/**`, `src/pages/TryOnPage.tsx` or `src/components/tryon/**`; the lead is rewriting them. Part 1: build the form as `src/components/seller/ListingForm.tsx` and wire it into `SellPage` after the merge. Part 2: everything except C4 is unaffected.
+
 - **SDK note:** we use `@mysten/dapp-kit-react` 2.x on gRPC, not the old `@mysten/dapp-kit`. Public fullnodes reject JSON-RPC. Hooks: `useCurrentAccount`, `useCurrentClient`, `useDAppKit`. To send a transaction, call `useDAppKit().signAndExecuteTransaction({ transaction })` and treat `result.FailedTransaction` as an error. The SDK docs are in `node_modules/@mysten/dapp-kit-react/docs/`.
 - **Wallets:** use Slush on testnet, funded from https://faucet.sui.io. The faucet credits the *address balance*, so `sui client gas` shows nothing even when the wallet has funds.
 - **Branches:** `seller/…` and `store/…`. Open small PRs to `main` at least every 45 min. Before merging, `pnpm build` and `pnpm test` must pass. Squash merge.
