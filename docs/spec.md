@@ -22,7 +22,7 @@ Everything runs on **Sui testnet**. There is no backend server and no database.
 | Frontend | Vite + React 19 + TypeScript + Tailwind 4 + React Router | All heavy work (3D fit, face tracking) is client-side, so there is no need for a server framework. The output is a static site that can be hosted on Walrus Sites. |
 | Chain | Sui testnet, Move 2024 package `visual_shop` | Listings and receipts are on-chain objects. |
 | Files | Walrus testnet through the public publisher/aggregator HTTP API | Both endpoints send `access-control-allow-origin: *` (checked 2026-10-08). An upload takes about 30 s and the public publisher caps blobs at about 10 MiB. |
-| Wallet | `@mysten/dapp-kit` 1.1.17 (`ConnectButton`, `useSignAndExecuteTransaction`) with `@mysten/sui` 2.35 JSON-RPC client | |
+| Wallet & RPC | `@mysten/dapp-kit-react` 2.1 (`ConnectButton` from `/ui`, `useDAppKit().signAndExecuteTransaction`) with `SuiGrpcClient` from `@mysten/sui` 2.35 | Public fullnodes **no longer serve JSON-RPC** (verified 2026-10-08). Reads use the transport-agnostic `client.core.*` API and decode Move structs from BCS. |
 | 3D creation | Port the eye-clinic "reference" reconstruction path, which runs fully in the browser through a web worker | It has no server dependency. The legacy neural path (Hunyuan, Tripo, Meshy, Gemini) is dropped. |
 | Try-on | Port `ai-ar-tryon.tsx` (MediaPipe FaceMesh from a pinned CDN version, three.js overlay) | Proven in eye-clinic. The booking flow and clinic branding are removed. |
 | Shipping | Out of scope | The Receipt is the proof of purchase. Physical delivery is arranged off-chain and is not part of the demo. |
@@ -33,11 +33,11 @@ Everything runs on **Sui testnet**. There is no backend server and no database.
 Browser (static Vite app)
  ├─ /sell        Studio (web worker fit → GLB)  ──PUT──▶ Walrus publisher  (photo, GLB → blob IDs)
  │               create_listing(shop, …, blob IDs) ──▶ Sui
- ├─ /            getObject(Shop) → listing IDs → multiGetObjects ──▶ Sui
+ ├─ /            core.getObject(Shop) → listing IDs → core.getObjects ──▶ Sui (gRPC)
  ├─ /listing/:id ModelViewer(GLB) ◀──GET── Walrus aggregator
  │               buy(listing, coin) → Receipt ──▶ Sui
  ├─ /try-on/:id  Camera + MediaPipe + three.js overlay of the GLB
- └─ /purchases   getOwnedObjects(Receipt) ──▶ Sui
+ └─ /purchases   core.listOwnedObjects(type = Receipt) ──▶ Sui
 ```
 
 ## 4. Move contract — `move/sources/marketplace.move` (done, 5 tests pass)
@@ -55,7 +55,8 @@ Browser (static Vite app)
 
 - `src/config.ts` reads `VITE_*` from `.env`. `.env` is committed because it holds only public IDs.
 - `src/types.ts` defines `Listing`, `Receipt` and `NewListingInput`.
-- `src/lib/sui/marketplace.ts` provides `createListingTx`, `buyTx`, `updateListingTx`, `fetchListings`, `fetchListing` and `fetchReceipts`.
+- `src/dapp-kit.ts` creates the dApp Kit instance (gRPC client per network).
+- `src/lib/sui/marketplace.ts` provides `createListingTx`, `buyTx`, `updateListingTx`, `fetchListings`, `fetchListing` and `fetchReceipts`. Its `ShopBcs`, `ListingBcs` and `ReceiptBcs` must match the Move structs field for field, so update both together.
 - `src/lib/walrus.ts` provides `uploadToWalrus(blob) → blobId` and `walrusUrl(blobId)`.
 - `src/hooks/useMarketplace.ts` provides `useListings`, `useListing(id)` and `useMyReceipts`.
 - GLB format: the studio exports binary glTF in **meters** with embedded textures and `userData.eyewear` (version 2, anchors `bridgeCenter`, `leftHinge`, `rightHinge`). The viewer and try-on load it from `walrusUrl(listing.modelBlobId)`.

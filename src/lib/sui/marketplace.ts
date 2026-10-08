@@ -1,5 +1,6 @@
 import { Transaction } from '@mysten/sui/transactions'
-import type { SuiJsonRpcClient, SuiObjectResponse } from '@mysten/sui/jsonRpc'
+import { bcs } from '@mysten/sui/bcs'
+import type { ClientWithCoreApi } from '@mysten/sui/client'
 import { config } from '@/config'
 import type { Listing, NewListingInput, Receipt } from '@/types'
 
@@ -53,74 +54,88 @@ export function updateListingTx(
 }
 
 // === Queries ===
+// Objects are read through the transport-agnostic core API and decoded from BCS,
+// so these structs must match move/sources/marketplace.move field-for-field.
 
-type Fields = Record<string, unknown>
+const ShopBcs = bcs.struct('Shop', {
+  id: bcs.Address,
+  listings: bcs.vector(bcs.Address),
+})
 
-function fieldsOf(res: SuiObjectResponse): { id: string; fields: Fields } | null {
-  const content = res.data?.content
-  if (!res.data || !content || content.dataType !== 'moveObject') return null
-  return { id: res.data.objectId, fields: content.fields as Fields }
-}
+const ListingBcs = bcs.struct('Listing', {
+  id: bcs.Address,
+  seller: bcs.Address,
+  title: bcs.string(),
+  description: bcs.string(),
+  price: bcs.u64(),
+  stock: bcs.u64(),
+  sold: bcs.u64(),
+  image_blob_id: bcs.string(),
+  model_blob_id: bcs.string(),
+  active: bcs.bool(),
+})
 
-export function parseListing(res: SuiObjectResponse): Listing | null {
-  const obj = fieldsOf(res)
-  if (!obj) return null
-  const f = obj.fields
+const ReceiptBcs = bcs.struct('Receipt', {
+  id: bcs.Address,
+  listing_id: bcs.Address,
+  seller: bcs.Address,
+  buyer: bcs.Address,
+  price: bcs.u64(),
+  title: bcs.string(),
+  image_blob_id: bcs.string(),
+  model_blob_id: bcs.string(),
+})
+
+export function decodeListing(content: Uint8Array): Listing {
+  const f = ListingBcs.parse(content)
   return {
-    id: obj.id,
-    seller: String(f.seller),
-    title: String(f.title),
-    description: String(f.description),
-    price: BigInt(f.price as string),
+    id: f.id,
+    seller: f.seller,
+    title: f.title,
+    description: f.description,
+    price: BigInt(f.price),
     stock: Number(f.stock),
     sold: Number(f.sold),
-    imageBlobId: String(f.image_blob_id),
-    modelBlobId: String(f.model_blob_id),
-    active: Boolean(f.active),
+    imageBlobId: f.image_blob_id,
+    modelBlobId: f.model_blob_id,
+    active: f.active,
   }
 }
 
-export function parseReceipt(res: SuiObjectResponse): Receipt | null {
-  const obj = fieldsOf(res)
-  if (!obj) return null
-  const f = obj.fields
+export function decodeReceipt(content: Uint8Array): Receipt {
+  const f = ReceiptBcs.parse(content)
   return {
-    id: obj.id,
-    listingId: String(f.listing_id),
-    seller: String(f.seller),
-    buyer: String(f.buyer),
-    price: BigInt(f.price as string),
-    title: String(f.title),
-    imageBlobId: String(f.image_blob_id),
-    modelBlobId: String(f.model_blob_id),
+    id: f.id,
+    listingId: f.listing_id,
+    seller: f.seller,
+    buyer: f.buyer,
+    price: BigInt(f.price),
+    title: f.title,
+    imageBlobId: f.image_blob_id,
+    modelBlobId: f.model_blob_id,
   }
 }
 
-export async function fetchListings(client: SuiJsonRpcClient): Promise<Listing[]> {
-  const shop = fieldsOf(await client.getObject({ id: config.shopId, options: { showContent: true } }))
-  const ids = (shop?.fields.listings as string[] | undefined) ?? []
-  if (ids.length === 0) return []
+export async function fetchListings(client: ClientWithCoreApi): Promise<Listing[]> {
+  const { object: shop } = await client.core.getObject({ objectId: config.shopId, include: { content: true } })
+  const ids = ShopBcs.parse(shop.content).listings
   const listings: Listing[] = []
-  // multiGetObjects accepts at most 50 IDs per call.
+  // getObjects is batched to keep each request small.
   for (let i = 0; i < ids.length; i += 50) {
-    const page = await client.multiGetObjects({ ids: ids.slice(i, i + 50), options: { showContent: true } })
-    for (const res of page) {
-      const listing = parseListing(res)
-      if (listing) listings.push(listing)
+    const { objects } = await client.core.getObjects({ objectIds: ids.slice(i, i + 50), include: { content: true } })
+    for (const obj of objects) {
+      if (!(obj instanceof Error)) listings.push(decodeListing(obj.content))
     }
   }
   return listings.reverse()
 }
 
-export async function fetchListing(client: SuiJsonRpcClient, id: string): Promise<Listing | null> {
-  return parseListing(await client.getObject({ id, options: { showContent: true } }))
+export async function fetchListing(client: ClientWithCoreApi, id: string): Promise<Listing> {
+  const { object } = await client.core.getObject({ objectId: id, include: { content: true } })
+  return decodeListing(object.content)
 }
 
-export async function fetchReceipts(client: SuiJsonRpcClient, owner: string): Promise<Receipt[]> {
-  const res = await client.getOwnedObjects({
-    owner,
-    filter: { StructType: receiptType() },
-    options: { showContent: true },
-  })
-  return res.data.map(parseReceipt).filter((r): r is Receipt => r !== null)
+export async function fetchReceipts(client: ClientWithCoreApi, owner: string): Promise<Receipt[]> {
+  const { objects } = await client.core.listOwnedObjects({ owner, type: receiptType(), include: { content: true } })
+  return objects.map((obj) => decodeReceipt(obj.content))
 }

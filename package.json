@@ -14,7 +14,7 @@
     "publish:move": "bash scripts/publish-move.sh"
   },
   "dependencies": {
-    "@mysten/dapp-kit": "1.1.17",
+    "@mysten/dapp-kit-react": "2.1.39",
     "@mysten/sui": "2.35.0",
     "@tanstack/react-query": "5.104.1",
     "clsx": "^2.1.1",

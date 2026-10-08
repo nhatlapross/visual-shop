@@ -1,4 +1,4 @@
-import { useCurrentAccount } from '@mysten/dapp-kit'
+import { useCurrentAccount } from '@mysten/dapp-kit-react'
 import { useMyReceipts } from '@/hooks/useMarketplace'
 import { formatSui } from '@/lib/sui/format'
 

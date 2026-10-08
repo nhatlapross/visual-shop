@@ -1,4 +1,4 @@
-import { ConnectButton } from '@mysten/dapp-kit'
+import { ConnectButton } from '@mysten/dapp-kit-react/ui'
 import { Glasses } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router'
 import { isContractConfigured } from '@/config'
